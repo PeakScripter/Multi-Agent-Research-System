@@ -1,0 +1,14 @@
+langgraph
+langchain
+langchain-google-genai
+python-dotenv
+pydantic
+typing-extensions
+arxiv
+requests
+beautifulsoup4
+feedparser
+pytz
+fastapi
+uvicorn
+python-docx>=1.1.0
