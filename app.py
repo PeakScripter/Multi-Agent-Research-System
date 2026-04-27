@@ -23,6 +23,7 @@ from typing import Dict, List, Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 # from database import save_to_history, get_all_history, get_history_by_id, delete_history
 
@@ -407,6 +408,25 @@ def _serialisable(obj):
         return obj
     except (TypeError, ValueError):
         return str(obj)
+
+
+_FRONTEND_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist")
+
+if os.path.isdir(_FRONTEND_DIST):
+    _assets = os.path.join(_FRONTEND_DIST, "assets")
+    if os.path.isdir(_assets):
+        app.mount("/assets", StaticFiles(directory=_assets), name="static_assets")
+
+    @app.get("/")
+    async def serve_index():
+        return FileResponse(os.path.join(_FRONTEND_DIST, "index.html"))
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        file_path = os.path.join(_FRONTEND_DIST, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(_FRONTEND_DIST, "index.html"))
 
 
 if __name__ == "__main__":

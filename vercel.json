@@ -1,15 +1,6 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/research", "destination": "/app.py" },
-    { "source": "/chat", "destination": "/app.py" },
-    { "source": "/voice", "destination": "/app.py" },
-    { "source": "/tts", "destination": "/app.py" },
-    { "source": "/compare", "destination": "/app.py" },
-    { "source": "/rag/(.*)", "destination": "/app.py" },
-    { "source": "/status", "destination": "/app.py" },
-    { "source": "/documents", "destination": "/app.py" },
-    { "source": "/(.*)", "destination": "/frontend/dist/$1" },
-    { "source": "/(.*)", "destination": "/frontend/dist/index.html" }
+    { "source": "/(.*)", "destination": "/app.py" }
   ]
 }
