@@ -394,15 +394,6 @@ async def list_documents():
     return [f for f in os.listdir(OUTPUTS_DIR) if f.endswith(".docx")]
 
 
-@app.get("/")
-def root():
-    return {
-        "message": "MARS Research Assistant API v2.0",
-        "model": "Groq GPT-OSS 120B",
-        "endpoints": ["/research", "/chat", "/voice", "/tts", "/compare", "/rag/search", "/status"],
-    }
-
-
 # ── Utility ────────────────────────────────────────────────────────────────────
 
 def _serialisable(obj):
@@ -420,4 +411,4 @@ def _serialisable(obj):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
