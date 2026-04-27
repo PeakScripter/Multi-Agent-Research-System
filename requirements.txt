@@ -20,8 +20,7 @@ pytz
 youtube-transcript-api
 
 # ── Vector DB / RAG ───────────────────────────────────────────────────────────
-qdrant-client[fastembed]
-fastembed
+qdrant-client
 
 # ── Output ────────────────────────────────────────────────────────────────────
 python-docx>=1.1.0
