@@ -1,30 +1,15 @@
 {
   "version": 2,
-  "name": "mars-research-system",
-  "builds": [
-    {
-      "src": "api.py",
-      "use": "@vercel/python",
-      "config": { "maxDuration": 300 }
-    },
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
-    }
-  ],
-  "routes": [
-    { "src": "/research", "dest": "api.py" },
-    { "src": "/chat", "dest": "api.py" },
-    { "src": "/voice", "dest": "api.py" },
-    { "src": "/tts", "dest": "api.py" },
-    { "src": "/compare", "dest": "api.py" },
-    { "src": "/rag/search", "dest": "api.py" },
-    { "src": "/rag/recent", "dest": "api.py" },
-    { "src": "/history(.*)", "dest": "api.py" },
-    { "src": "/status", "dest": "api.py" },
-    { "src": "/documents", "dest": "api.py" },
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/index.html" }
+  "rewrites": [
+    { "source": "/research", "destination": "/api.py" },
+    { "source": "/chat", "destination": "/api.py" },
+    { "source": "/voice", "destination": "/api.py" },
+    { "source": "/tts", "destination": "/api.py" },
+    { "source": "/compare", "destination": "/api.py" },
+    { "source": "/rag/(.*)", "destination": "/api.py" },
+    { "source": "/status", "destination": "/api.py" },
+    { "source": "/documents", "destination": "/api.py" },
+    { "source": "/(.*)", "destination": "/frontend/dist/$1" },
+    { "source": "/(.*)", "destination": "/frontend/dist/index.html" }
   ]
 }
