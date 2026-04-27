@@ -1,182 +1,145 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/LangGraph-Powered-blue?style=for-the-badge&logo=python&logoColor=white" />
-  <img src="https://img.shields.io/badge/Google%20Gemini-AI-orange?style=for-the-badge&logo=google&logoColor=white" />
-  <img src="https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi&logoColor=white" />
-  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" />
+<div align="center">
+  <img src="https://img.shields.io/badge/LangGraph-Orchestrated-blue?style=for-the-badge&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/Groq-120B%20LLM-orange?style=for-the-badge&logo=fastapi&logoColor=white" />
+  <img src="https://img.shields.io/badge/React-Frontend-61DAFB?style=for-the-badge&logo=react&logoColor=black" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" />
-</p>
+</div>
 
-<h1 align="center">🤖 Multi-Agent Research System (MARS)</h1>
+<h1 align="center">🌌 Multi-Agent Research System (MARS)</h1>
 
 <p align="center">
-  <b>A LangGraph-powered multi-agent pipeline that orchestrates 5 specialized AI agents to produce polished research reports — automatically.</b>
+  <b>A state-of-the-art agentic pipeline that orchestrates specialized AI agents to generate deep-dive research reports.</b>
 </p>
 
 <p align="center">
   <a href="#-architecture">Architecture</a> •
   <a href="#-features">Features</a> •
   <a href="#-quick-start">Quick Start</a> •
-  <a href="#-api-reference">API</a> •
-  <a href="#-usage">Usage</a>
+  <a href="#-frontend">Frontend</a> •
+  <a href="#-api-reference">API</a>
 </p>
 
 ---
 
 ## 🏗 Architecture
 
-```
-                        ┌─────────────────────────────────────────┐
-                        │         MARS — Agent Orchestration       │
-                        └─────────────────────────────────────────┘
+MARS uses a sophisticated **LangGraph** workflow to coordinate agents through iterative research, writing, and critique cycles.
 
-  User Topic
-      │
-      ▼
- ┌──────────┐     ┌────────────┐     ┌──────────┐     ┌──────────┐
- │  Planner │────▶│ Researcher │────▶│  Writer  │────▶│  Critic  │
- │  Agent   │     │   Agent    │     │  Agent   │     │  Agent   │
- └──────────┘     └────────────┘     └──────────┘     └─────┬────┘
-                        ▲                  ▲                 │
-                        │  Needs Research  │  Needs Revision │ Approved
-                        └──────────────────┘                 │
-                                                             ▼
-                                                       ┌──────────┐
-                                                       │   Word   │
-                                                       │  Agent   │
-                                                       └─────┬────┘
-                                                             │
-                                                             ▼
-                                               📄 Final Report (.docx + .json)
+```mermaid
+graph TD
+    User([User Topic]) --> Planner[Planner Agent]
+    Planner --> Researcher[Researcher Agent]
+    Researcher --> Writer[Writer Agent]
+    Writer --> Critic[Critic Agent]
+    Critic -- "Revision Needed" --> Writer
+    Critic -- "Needs More Data" --> Researcher
+    Critic -- "Approved" --> Word[Word Agent]
+    Word --> Output([Final Report .docx])
 ```
 
-| Agent | Role |
-|-------|------|
-| 🗂 **Planner** | Breaks topic into a structured research plan |
-| 🔍 **Researcher** | Gathers and synthesizes information |
-| ✍️ **Writer** | Drafts the full research report |
-| 🧐 **Critic** | Reviews quality — sends back for revision if needed |
-| 📝 **Word** | Formats final output into a polished .docx |
+| Agent | Capability |
+|-------|------------|
+| 🗂 **Planner** | Structures the research trajectory and key sections. |
+| 🔍 **Researcher** | Scours ArXiv, GitHub, and Semantic Scholar for real data. |
+| ✍️ **Writer** | Synthesizes information into a cohesive, academic-grade report. |
+| 🧐 **Critic** | Enforces quality, accuracy, and depth through feedback loops. |
+| 📝 **Word** | Produces production-ready `.docx` files with proper formatting. |
 
 ---
 
 ## ✨ Features
 
-- **Multi-Agent Collaboration** — 5 specialized agents with iterative refinement loops
-- **Automatic Model Fallback** — switches between Gemini models on rate limits
-- **Dual Output Formats** — JSON structured data + formatted Word (.docx) documents
-- **FastAPI Interface** — REST API with streaming and chat endpoints
-- **Quality Control** — built-in Critic→Writer revision cycles (configurable max iterations)
-- **Rate Limit Resilience** — exponential backoff + model rotation on 429 errors
+- **Agentic Orchestration** — Built on LangGraph for robust, stateful agent coordination.
+- **Deep Research** — Integrated with multiple data sources for factual grounding.
+- **Voice-Enabled** — Supports audio input via Sarvam AI STT for hands-free research.
+- **Dual Frontends** — Choose between a lightweight standalone UI or a professional React dashboard.
+- **Vector Memory** — Uses Qdrant to store and retrieve past research findings (RAG).
+- **Pro Formatting** — Automatically generates polished Word documents for immediate use.
 
 ---
 
 ## ⚡ Quick Start
 
+### 1. Prerequisites
+- Python 3.10+
+- [Groq API Key](https://console.groq.com/)
+- (Optional) [Sarvam AI Key](https://dashboard.sarvam.ai/) for voice features.
+
+### 2. Installation
 ```bash
-# 1. Clone
+# Clone the repository
 git clone https://github.com/PeakScripter/Multi-Agent-Research-System.git
 cd Multi-Agent-Research-System
 
-# 2. Install dependencies
+# Install dependencies
 pip install -r requirements.txt
+```
 
-# 3. Configure environment
-cp env_example.txt .env
-# Add your GOOGLE_API_KEY to .env
+### 3. Configuration
+Copy the example environment file and fill in your keys:
+```bash
+cp .env.example .env
+```
+*Make sure to set `GROQ_API_KEY` in the `.env` file.*
 
-# 4. Run
-python main.py "Future of AI in Healthcare" --docx
+### 4. Run CLI
+```bash
+python main.py "Impact of Quantum Computing on Cryptography" --docx
 ```
 
 ---
 
-## 🚀 Usage
+## 🌐 Web Interface
 
-### CLI
+MARS provides two ways to interact with the system via a browser:
 
+### Option A: Professional React App (Recommended)
+A modern, feature-rich dashboard built with React, Vite, and Tailwind CSS.
 ```bash
-# Generate report + Word doc
-python main.py "Quantum Computing Trends 2024" --docx
-
-# With verbose agent logs
-python main.py "Climate Change Solutions" --verbose --docx
-
-# Check model availability
-python main.py --status
+cd frontend
+npm install
+npm run dev
 ```
 
-### FastAPI Server
+### Option B: Standalone UI
+A lightweight, single-file frontend for quick access.
+1. Start the backend: `python api.py`
+2. Open `index_1.html` directly in your browser.
 
+---
+
+## 🚀 API Reference
+
+Start the server using Uvicorn:
 ```bash
 python -m uvicorn api:app --host 0.0.0.0 --port 8000
 ```
 
-**Endpoints:**
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/research` | Trigger full agent workflow |
-| GET | `/download_report/{filename}` | Download generated .docx |
-| POST | `/chat` | Conversational research interface |
-| GET | `/status` | Model health and rate limit status |
-
-### Programmatic
-
-```python
-from workflow import MultiAgentResearchWorkflow
-
-workflow = MultiAgentResearchWorkflow()
-result = workflow.run("Your research topic")
-print(result['final_report'])
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/research` | POST | Trigger the full multi-agent research pipeline. |
+| `/chat` | POST | Chat with the agentic research assistant. |
+| `/voice` | POST | Upload audio for automated transcription and research. |
+| `/documents`| GET | List all generated research reports. |
+| `/status` | GET | Check Groq model health and availability. |
 
 ---
 
-## Configuration
+## 📁 Project Structure
 
-Create a `.env` file:
-
-```env
-GOOGLE_API_KEY=your_google_api_key_here
-GEMINI_MODEL=gemini-1.5-pro
-MAX_MODEL_RETRIES=3
-RATE_LIMIT_RETRY_DELAY=60
-```
-
----
-
-## 📁 Output Structure
-
-```
-outputs/
-├── reports/
-│   └── report_Topic_Name_YYYYMMDD.json
-├── Topic_Name_report.docx
-└── logs/
-    └── research_system.log
-```
-
----
-
-## Tech Stack
-
-- **Orchestration:** LangGraph, Agent Swarm
-- **LLM:** Google Gemini (1.5 Pro / Flash) via LiteLLM
-- **API:** FastAPI + Uvicorn
-- **Output:** python-docx
-- **Language:** Python 3.10+
-
----
-
-## Contributing
-
-1. Fork the repo
-2. Create a feature branch
-3. Commit changes
-4. Open a Pull Request
+- `agents/` — Logic for Planner, Researcher, Writer, Critic, and Word agents.
+- `rag/` — Vector database integration (Qdrant).
+- `voice/` — Speech-to-text and Text-to-speech modules.
+- `outputs/` — Stores generated reports, logs, and metadata.
+- `api.py` — FastAPI server implementation.
+- `workflow.py` — LangGraph state machine definition.
 
 ---
 
 ## 📄 License
 
-MIT License — see LICENSE for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+---
+
+<p align="center">Built with ❤️ by the PeakScripter Team</p>

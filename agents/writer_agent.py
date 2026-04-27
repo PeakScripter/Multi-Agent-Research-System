@@ -2,7 +2,7 @@
 
 import logging
 from typing import Dict, Any
-from gemini_client import gemini_client
+from groq_client import groq_client as gemini_client
 from models import AgentState
 
 logger = logging.getLogger(__name__)
@@ -53,6 +53,21 @@ CS/IT Report structure should include:
 
 Your writing should be technically authoritative, well-reasoned, and thoroughly supported by real research data from CS/IT sources."""
 
+        import json
+
+        # Build enrichment context string
+        enrichment_parts = []
+        if state.trend_timeline:
+            enrichment_parts.append(f"Trend Analysis:\n{json.dumps(state.trend_timeline, indent=2)}")
+        if state.debate_perspectives:
+            enrichment_parts.append(f"Debate Perspectives:\n{json.dumps(state.debate_perspectives, indent=2)}")
+        if state.citations:
+            enrichment_parts.append(f"Available Citations ({len(state.citations)}):\n" +
+                "\n".join(f"  [{c.get('id','')}] {c.get('title','')} ({c.get('year','')})" for c in state.citations[:10]))
+        if state.mermaid_diagrams:
+            enrichment_parts.append(f"Diagrams generated: {', '.join(d.get('title','') for d in state.mermaid_diagrams)}")
+        enrichment_section = "\n\n".join(enrichment_parts) if enrichment_parts else "No enrichment data available."
+
         user_prompt = f"""
 CS/IT Research Topic: "{state.user_topic}"
 
@@ -62,35 +77,39 @@ Research Plan:
 Synthesized Research Data:
 {state.synthesized_data}
 
-Write a comprehensive CS/IT technical report based on this research. The report should be well-structured, technically accurate, and thoroughly cover all the key findings from the research.
+Enrichment Data (incorporate naturally into the report):
+{enrichment_section}
+
+Write a comprehensive CS/IT technical report based on all data above. The report should be well-structured, technically accurate, and thoroughly cover all the key findings.
 
 Report Requirements:
 1. **Length**: 2500-3500 words
-2. **Structure**: Use clear technical headings and subheadings
-3. **Content**: Cover all key technical findings from the research
-4. **Evidence**: Support all major claims with evidence from academic papers, repositories, and industry sources
-5. **Balance**: Include any conflicting technical approaches or alternative viewpoints
-6. **Clarity**: Use precise, technical language appropriate for CS/IT professionals
-7. **Completeness**: Ensure comprehensive coverage of the technical topic
+2. **Structure**: Use strict Markdown heading syntax (# for title, ## for sections, ### for sub-sections). Do NOT just use bold text as headings.
+3. **Tables**: Use Markdown table syntax (|---|---|) for technical comparisons or data summaries.
+4. **Content**: Cover all key technical findings; weave in trend analysis and debate perspectives where relevant.
+5. **Citations**: Reference the citation IDs (e.g. [ref1], [ref2]) inline when citing evidence.
+6. **Balance**: Include conflicting viewpoints from debate perspectives if available.
+7. **Clarity**: Precise technical language for CS/IT professionals.
+8. **Completeness**: Comprehensive coverage of the technical topic.
 
 CS/IT Report Structure:
-- **Executive Summary** (300-400 words) - Key technical insights and findings
-- **Technical Background** (400-500 words) - Context and technical foundations
-- **Main Technical Findings** (organized by themes, 1500-2000 words)
-- **Implementation and Practical Applications** (400-600 words)
-- **Performance and Technical Considerations** (300-400 words)
-- **Future Directions and Research Gaps** (300-400 words)
+# [Topic Title]
+## Executive Summary (300-400 words) - Key technical insights and findings
+## Technical Background (400-500 words) - Context and technical foundations
+## Main Technical Findings (organized by themes, 1500-2000 words)
+## Trend Analysis & Momentum (200-300 words) — use trend data if available
+## Debate & Perspectives (200-300 words) — use debate data if available, skip if not
+## Implementation and Practical Applications (400-600 words)
+## Future Directions and Research Gaps (300-400 words)
+## References — list used citation IDs at the end
 
 Guidelines:
-- Use the research plan's main technical questions as a guide for structure
-- Incorporate findings from all CS/IT source types (ArXiv, GitHub, industry reports)
-- Address any conflicting technical approaches transparently
-- Provide specific technical examples and evidence for key points
-- Include code snippets, algorithms, or technical specifications where relevant
-- Reference specific papers, repositories, and technical sources
-- Maintain a technical, analytical tone appropriate for CS/IT professionals
-- Ensure smooth transitions between technical sections
-- Make the report technically engaging while remaining professional and actionable
+- USE PROPER MARKDOWN HEADINGS (#, ##, ###).
+- Incorporate trend momentum and timeline naturally into the analysis.
+- Present debate pro/con fairly when the topic is controversial.
+- Use [refN] citation markers inline for all major claims.
+- Maintain a technical, analytical tone.
+- Use tables to compare different technologies or approaches where data allows.
 
 Please write the complete CS/IT technical report following these guidelines.
 """
@@ -107,14 +126,20 @@ Please write the complete CS/IT technical report following these guidelines.
             # Update state
             state.draft_report = response
             
-            return {"draft_report": response}
+            return {
+                "draft_report": response,
+                "writing_attempts": state.writing_attempts
+            }
             
         except Exception as e:
             logger.error(f"{self.name} failed to write report: {e}")
             # Fallback: create a basic report
             fallback_report = self._create_fallback_report(state)
             state.draft_report = fallback_report
-            return {"draft_report": fallback_report}
+            return {
+                "draft_report": fallback_report,
+                "writing_attempts": state.writing_attempts
+            }
     
     def _create_fallback_report(self, state: AgentState) -> str:
         """Create a basic fallback report."""
@@ -214,9 +239,15 @@ Provide the complete revised report.
             # Update state
             state.draft_report = response
             
-            return {"draft_report": response}
+            return {
+                "draft_report": response,
+                "writing_attempts": state.writing_attempts
+            }
             
         except Exception as e:
             logger.error(f"{self.name} failed to revise report: {e}")
             # Return original report if revision fails
-            return {"draft_report": state.draft_report}
+            return {
+                "draft_report": state.draft_report,
+                "writing_attempts": state.writing_attempts
+            }

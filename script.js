@@ -150,7 +150,7 @@ function sendMessage() {
         stream: false
     };
     
-    fetch('https://localhost:8000/chat', {
+    fetch('http://localhost:8000/chat', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -325,7 +325,7 @@ async function fetchDocuments() {
     if (!container) return;
     container.innerHTML = `<p class="text-sm text-gray-500">Loading documents...</p>`;
 
-    const listUrl = 'https://localhost:8000/documents';
+    const listUrl = 'http://localhost:8000/documents';
 
     try {
         const res = await fetch(listUrl);
@@ -414,7 +414,7 @@ async function downloadReport(filename) {
     const filenameEscaped = encodeURIComponent(filename);
     const tryUrls = [
         `https://ars-multi-agent-research-system.vercel.app/download_report/${filenameEscaped}`,
-        `https://localhost:8000/download_report/${filenameEscaped}`
+        `http://localhost:8000/download_report/${filenameEscaped}`
     ];
 
     let lastError = null;

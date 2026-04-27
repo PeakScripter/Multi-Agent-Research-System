@@ -2,12 +2,12 @@
 
 import logging
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any
 from datetime import datetime
-from gemini_client import gemini_client
+from groq_client import groq_client as gemini_client
 from models import AgentState, SynthesizedData
 from data_sources import CSResearchFetcher, RealTimeDataSources
-from config import CS_IT_DOMAIN_ONLY, CS_IT_KEYWORDS
+from config import CS_IT_DOMAIN_ONLY
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,8 @@ class ResearcherAgent:
                 "synthesized_data": synthesized_data,
                 "arxiv_offset": new_arxiv_offset,
                 "github_offset": new_github_offset,
-                "stackoverflow_offset": new_stackoverflow_offset
+                "stackoverflow_offset": new_stackoverflow_offset,
+                "research_attempts": state.research_attempts
             }
             
         except Exception as e:
@@ -97,7 +98,10 @@ class ResearcherAgent:
             # Fallback: create basic synthesized data
             fallback_data = self._create_fallback_data(state.user_topic)
             state.synthesized_data = fallback_data
-            return {"synthesized_data": fallback_data}
+            return {
+                "synthesized_data": fallback_data,
+                "research_attempts": state.research_attempts
+            }
     
     def _synthesize_real_data(self, topic: str, arxiv_data: Dict, realtime_data: Dict, 
                              domain_insights: Dict, research_plan: Dict) -> Dict[str, Any]:
@@ -408,9 +412,15 @@ Return the expanded research in the same JSON format as before, but with additio
             # Update state
             state.synthesized_data = research_data.dict()
             
-            return {"synthesized_data": research_data.dict()}
+            return {
+                "synthesized_data": research_data.dict(),
+                "research_attempts": state.research_attempts
+            }
             
         except Exception as e:
             logger.error(f"{self.name} failed to expand research: {e}")
             # Return original data if expansion fails
-            return {"synthesized_data": state.synthesized_data}
+            return {
+                "synthesized_data": state.synthesized_data,
+                "research_attempts": state.research_attempts
+            }

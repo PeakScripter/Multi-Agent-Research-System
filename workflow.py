@@ -1,301 +1,321 @@
-"""LangGraph workflow for the multi-agent research system."""
+"""LangGraph workflow — orchestrates all agents including enrichment pipeline and RAG."""
 
 import logging
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Any, Literal
+
 from langgraph.graph import StateGraph, END
+
 from models import AgentState, WorkflowStatus
 from agents.planner_agent import PlannerAgent
 from agents.researcher_agent import ResearcherAgent
 from agents.writer_agent import WriterAgent
 from agents.critic_agent import CriticAgent
+from agents.citation_agent import CitationAgent
+from agents.visualization_agent import VisualizationAgent
+from agents.debate_agent import DebateAgent
+from agents.trend_agent import TrendAgent
 from config import MAX_ITERATIONS, MAX_RESEARCH_ATTEMPTS, MAX_WRITING_ATTEMPTS
 
 logger = logging.getLogger(__name__)
 
 
 class MultiAgentResearchWorkflow:
-    """LangGraph workflow orchestrating the multi-agent research system."""
-    
+    """
+    Full pipeline:
+      planner → researcher → rag_store → enrichment → writer → critic → [loop] → word
+    Enrichment runs Citation, Visualization, Trend (and optionally Debate) in parallel threads.
+    """
+
     def __init__(self):
-        """Initialize the workflow with all agents."""
         self.planner = PlannerAgent()
         self.researcher = ResearcherAgent()
         self.writer = WriterAgent()
         self.critic = CriticAgent()
+        self.citation = CitationAgent()
+        self.visualization = VisualizationAgent()
+        self.debate = DebateAgent()
+        self.trend = TrendAgent()
+
+        # Lazy-import RAG to avoid hard failure if qdrant not installed
+        try:
+            from rag.qdrant_store import research_memory
+            self._memory = research_memory
+        except Exception:
+            self._memory = None
+
+        self.workflow = self._build()
+        logger.info("MultiAgentResearchWorkflow initialised")
+
+    # ── node helpers ──────────────────────────────────────────────────────────
+
+    def _log_agent(self, state: AgentState, agent_name: str) -> Dict[str, Any]:
+        """Log agent activity and return state updates."""
+        state.agent_log.append({"agent": agent_name, "ts": time.time()})
+        state.active_agent = agent_name
+        state.current_iteration += 1
+        return {
+            "agent_log": state.agent_log,
+            "active_agent": agent_name,
+            "current_iteration": state.current_iteration
+        }
+
+    # ── nodes ─────────────────────────────────────────────────────────────────
+
+    def _planner_node(self, state: AgentState) -> Dict[str, Any]:
+        log_updates = self._log_agent(state, "planner")
+        logger.info("▶ Planner")
+        try:
+            result = self.planner.create_research_plan(state)
+            plan = result.get("research_plan", {})
+            is_controversial = plan.get("is_controversial", False)
+            return {**log_updates, **result, "is_controversial": is_controversial, "active_agent": "researcher"}
+        except Exception as e:
+            logger.error(f"Planner error: {e}")
+            return {
+                **log_updates,
+                "research_plan": _fallback_plan(state.user_topic),
+                "is_controversial": False,
+                "active_agent": "researcher",
+            }
+
+    def _researcher_node(self, state: AgentState) -> Dict[str, Any]:
+        log_updates = self._log_agent(state, "researcher")
+        logger.info("▶ Researcher")
         
-        # Create the workflow graph
-        self.workflow = self._create_workflow()
-        logger.info("Multi-agent research workflow initialized")
-    
-    def _create_workflow(self) -> StateGraph:
-        """Create the LangGraph workflow."""
-        
-        # Create the state graph
-        workflow = StateGraph(AgentState)
-        
-        # Add nodes for each agent
-        workflow.add_node("planner", self._planner_node)
-        workflow.add_node("researcher", self._researcher_node)
-        workflow.add_node("writer", self._writer_node)
-        workflow.add_node("critic", self._critic_node)
-        
-        # Define the main flow
-        workflow.set_entry_point("planner")
-        
-        # Add edges for the main flow
-        workflow.add_edge("planner", "researcher")
-        workflow.add_edge("researcher", "writer")
-        workflow.add_edge("writer", END)
-        
-        # Add conditional edges from critic
-        workflow.add_conditional_edges(
+        # Inject RAG context before fetching new data
+        if self._memory:
+            rag_ctx = self._memory.get_context_for_topic(state.user_topic)
+            if rag_ctx:
+                state.rag_context = rag_ctx
+
+        if state.synthesized_data and state.research_attempts >= 1:
+            feedback = self.critic.get_feedback_for_research(state)
+            result = self.researcher.expand_research(state, feedback)
+        else:
+            result = self.researcher.gather_and_synthesize(state)
+
+        return {**log_updates, **result, "active_agent": "enrichment"}
+
+    def _rag_store_node(self, state: AgentState) -> Dict[str, Any]:
+        """Persist research results to Qdrant so future queries benefit."""
+        log_updates = self._log_agent(state, "rag_store")
+        logger.info("▶ RAG Store")
+        if self._memory and state.synthesized_data:
+            self._memory.store(
+                topic=state.user_topic,
+                synthesized_data=state.synthesized_data,
+                final_report=state.draft_report or "",
+            )
+        return {**log_updates, "active_agent": "enrichment"}
+
+    def _enrichment_node(self, state: AgentState) -> Dict[str, Any]:
+        """Run Citation, Visualization, Trend (and Debate if controversial) in parallel."""
+        log_updates = self._log_agent(state, "enrichment")
+        logger.info("▶ Enrichment (parallel)")
+
+        tasks = {
+            "citation": lambda: self.citation.generate_citations(state),
+            "visualization": lambda: self.visualization.generate_diagrams(state),
+            "trend": lambda: self.trend.analyze_trends(state),
+        }
+        if state.is_controversial:
+            tasks["debate"] = lambda: self.debate.generate_perspectives(state)
+
+        results: Dict[str, Any] = {}
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = {pool.submit(fn): name for name, fn in tasks.items()}
+            for future in as_completed(futures):
+                name = futures[future]
+                try:
+                    results.update(future.result())
+                    logger.info(f"  ✓ {name}")
+                except Exception as e:
+                    logger.error(f"  ✗ {name}: {e}")
+
+        return {**log_updates, **results, "active_agent": "writer"}
+
+    def _writer_node(self, state: AgentState) -> Dict[str, Any]:
+        log_updates = self._log_agent(state, "writer")
+        logger.info("▶ Writer")
+
+        if state.draft_report and state.writing_attempts >= 1:
+            feedback = self.critic.get_feedback_for_revision(state)
+            result = self.writer.revise_report(state, feedback)
+        else:
+            result = self.writer.write_report(state)
+
+        return {**log_updates, **result, "active_agent": "critic"}
+
+    def _critic_node(self, state: AgentState) -> Dict[str, Any]:
+        log_updates = self._log_agent(state, "critic")
+        logger.info("▶ Critic")
+        try:
+            result = self.critic.critique_report(state)
+        except Exception as e:
+            logger.error(f"Critic error: {e}")
+            result = {
+                "critique_feedback": "Auto-approved due to evaluation error.",
+                "approval_status": "approved",
+            }
+        return {**log_updates, **result, "active_agent": result.get("approval_status", "approved")}
+
+    def _human_review_node(self, state: AgentState) -> Dict[str, Any]:
+        """Placeholder — API layer intercepts this and waits for user input."""
+        self._log_agent(state, "human_review")
+        logger.info("▶ Human Review requested")
+        return {"human_review_requested": True, "active_agent": "human_review"}
+
+    # ── routing ───────────────────────────────────────────────────────────────
+
+    def _critic_decision(self, state: AgentState) -> Literal[
+        "approved", "revision_needed", "research_insufficient", "needs_human_review"
+    ]:
+
+        if state.current_iteration >= MAX_ITERATIONS:
+            logger.warning(f"Max iterations ({MAX_ITERATIONS}) reached — forcing approval")
+            state.max_iterations_reached = True
+            return "approved"
+        if state.research_attempts >= MAX_RESEARCH_ATTEMPTS:
+            logger.warning("Max research attempts — forcing approval")
+            return "approved"
+        if state.writing_attempts >= MAX_WRITING_ATTEMPTS:
+            logger.warning("Max writing attempts — forcing approval")
+            return "approved"
+
+        try:
+            decision = self.critic.should_continue_workflow(state)
+            if decision == "revision_needed" and state.writing_attempts >= 2:
+                return "approved"
+            if decision == "research_insufficient" and state.research_attempts >= 2:
+                return "approved"
+            return decision
+        except Exception as e:
+            logger.error(f"Critic decision error: {e}")
+            return "approved"
+
+    # ── graph assembly ────────────────────────────────────────────────────────
+
+    def _build(self) -> StateGraph:
+        g = StateGraph(AgentState)
+
+        g.add_node("planner", self._planner_node)
+        g.add_node("researcher", self._researcher_node)
+        g.add_node("rag_store", self._rag_store_node)
+        g.add_node("enrichment", self._enrichment_node)
+        g.add_node("writer", self._writer_node)
+        g.add_node("critic", self._critic_node)
+        g.add_node("human_review", self._human_review_node)
+
+        g.set_entry_point("planner")
+        g.add_edge("planner", "researcher")
+        g.add_edge("researcher", "rag_store")
+        g.add_edge("rag_store", "enrichment")
+        g.add_edge("enrichment", "writer")
+        g.add_edge("writer", "critic")
+
+        g.add_conditional_edges(
             "critic",
             self._critic_decision,
             {
                 "approved": END,
                 "revision_needed": "writer",
-                "research_insufficient": "researcher"
-            }
+                "research_insufficient": "researcher",
+                "needs_human_review": "human_review",
+            },
         )
-        
-        # Compile the workflow
-        return workflow.compile(checkpointer=None)
-    
-    def _planner_node(self, state: AgentState) -> Dict[str, Any]:
-        """Execute the planner agent."""
-        logger.info("Executing planner node")
+        g.add_edge("human_review", END)
+
+        return g.compile(checkpointer=None)
+
+    # ── public API ────────────────────────────────────────────────────────────
+
+    def run(self, topic: str, compare_topic: str = None) -> Dict[str, Any]:
+        logger.info(f"Starting research: '{topic}'")
+        initial = AgentState(
+            user_topic=topic,
+            compare_topic=compare_topic,
+            is_comparison_mode=bool(compare_topic),
+        )
         try:
-            result = self.planner.create_research_plan(state)
-            return result
+            final = self.workflow.invoke(initial)
+            final["final_report"] = final.get("draft_report", "No report generated")
+            logger.info("Workflow completed")
+            return final
         except Exception as e:
-            logger.error(f"Error in planner node: {e}")
-            # Create a basic fallback plan
-            fallback_plan = {
-                "main_questions": [f"What is {state.user_topic}?", f"What are the key aspects of {state.user_topic}?"],
-                "sub_topics": ["Overview", "Key aspects", "Implications"],
-                "search_strategies": ["General research", "Literature review"],
-                "expected_sources": ["General sources", "Academic papers"],
-                "research_depth": 3
-            }
-            return {"research_plan": fallback_plan}
-    
-    def _researcher_node(self, state: AgentState) -> Dict[str, Any]:
-        """Execute the researcher agent."""
-        logger.info("Executing researcher node")
-        
-        # Increment research attempts
-        state.research_attempts = getattr(state, 'research_attempts', 0) + 1
-        
-        # Check if we need to expand research or start fresh
-        if state.synthesized_data and state.research_attempts > 1:
-            # This is a research expansion due to insufficient research
-            feedback = self.critic.get_feedback_for_research(state)
-            try:
-                result = self.researcher.expand_research(state, feedback)
-                return result
-            except Exception as e:
-                logger.error(f"Error in researcher expansion: {e}")
-                return {"synthesized_data": state.synthesized_data}
-        else:
-            # Initial research
-            try:
-                result = self.researcher.gather_and_synthesize(state)
-                return result
-            except Exception as e:
-                logger.error(f"Error in researcher node: {e}")
-                # Create fallback data
-                fallback_data = {
-                    "key_findings": [f"Research on {state.user_topic} shows various perspectives"],
-                    "supporting_evidence": [f"Evidence supports multiple viewpoints on {state.user_topic}"],
-                    "conflicting_information": [f"Some conflicting views exist on {state.user_topic}"],
-                    "source_summaries": [{"source_type": "General", "key_insights": f"Overview of {state.user_topic}", "reliability": "medium"}],
-                    "data_quality_score": 0.6
-                }
-                return {"synthesized_data": fallback_data}
-    
-    def _writer_node(self, state: AgentState) -> Dict[str, Any]:
-        """Execute the writer agent."""
-        logger.info("Executing writer node")
-        
-        # Increment writing attempts
-        state.writing_attempts = getattr(state, 'writing_attempts', 0) + 1
-        
-        # Check if we need to revise or write fresh
-        if state.draft_report and state.writing_attempts > 1:
-            # This is a revision
-            feedback = self.critic.get_feedback_for_revision(state)
-            try:
-                result = self.writer.revise_report(state, feedback)
-                return result
-            except Exception as e:
-                logger.error(f"Error in writer revision: {e}")
-                return {"draft_report": state.draft_report}
-        else:
-            # Initial writing
-            try:
-                result = self.writer.write_report(state)
-                return result
-            except Exception as e:
-                logger.error(f"Error in writer node: {e}")
-                # Create fallback report
-                fallback_report = f"# Research Report: {state.user_topic}\n\nThis is a fallback report due to technical limitations.\n\n## Overview\n\n{state.user_topic} is an important topic that requires further research and analysis.\n\n*Note: This report was generated as a fallback due to system limitations.*"
-                return {"draft_report": fallback_report}
-    
-    def _critic_node(self, state: AgentState) -> Dict[str, Any]:
-        """Execute the critic agent."""
-        logger.info("Executing critic node")
-        try:
-            result = self.critic.critique_report(state)
-            return result
-        except Exception as e:
-            logger.error(f"Error in critic node: {e}")
-            # Create fallback critique
-            fallback_critique = {
-                "critique_feedback": "Report evaluation completed with basic assessment.",
-                "approval_status": "approved",
-                "critique_details": {
-                    "overall_assessment": "approved",
-                    "specific_feedback": "Report meets basic requirements.",
-                    "strengths": ["Addresses the topic"],
-                    "weaknesses": ["Could be more detailed"],
-                    "recommendations": ["Continue improving"]
-                }
-            }
-            return fallback_critique
-    
-    def _critic_decision(self, state: AgentState) -> Literal["approved", "revision_needed", "research_insufficient"]:
-        """Make decision based on critic evaluation and iteration limits."""
-        logger.info("Making critic decision")
-        
-        # Increment iteration counter
-        state.current_iteration = getattr(state, 'current_iteration', 0) + 1
-        
-        # Check iteration limits first
-        if state.current_iteration >= MAX_ITERATIONS:
-            logger.warning(f"Max iterations ({MAX_ITERATIONS}) reached, forcing approval")
-            state.max_iterations_reached = True
-            return "approved"
-        
-        if state.research_attempts >= MAX_RESEARCH_ATTEMPTS:
-            logger.warning(f"Max research attempts ({MAX_RESEARCH_ATTEMPTS}) reached, forcing approval")
-            return "approved"
-        
-        if state.writing_attempts >= MAX_WRITING_ATTEMPTS:
-            logger.warning(f"Max writing attempts ({MAX_WRITING_ATTEMPTS}) reached, forcing approval")
-            return "approved"
-        
-        # Get decision from critic
-        try:
-            decision = self.critic.should_continue_workflow(state)
-            logger.info(f"Critic decision: {decision}")
-            
-            # Additional safety check - if we've been revising too many times, approve
-            if decision == "revision_needed" and state.writing_attempts >= 2:
-                logger.warning("Too many writing attempts, forcing approval")
-                return "approved"
-            
-            if decision == "research_insufficient" and state.research_attempts >= 2:
-                logger.warning("Too many research attempts, forcing approval")
-                return "approved"
-            
-            return decision
-            
-        except Exception as e:
-            logger.error(f"Error in critic decision: {e}")
-            return "approved"  # Default to approval to prevent infinite loops
-    
-    def run(self, topic: str) -> Dict[str, Any]:
-        """
-        Run the complete research workflow.
-        
-        Args:
-            topic: The research topic
-            
-        Returns:
-            Final state with completed research report
-        """
-        logger.info(f"Starting research workflow for topic: {topic}")
-        
-        # Initialize state
-        initial_state = AgentState(user_topic=topic)
-        
-        try:
-            # Run the workflow
-            final_state = self.workflow.invoke(initial_state)
-            
-            # Mark as completed
-            final_state["final_report"] = final_state.get("draft_report", "No report generated")
-            final_state["current_iteration"] = final_state.get("current_iteration", 0) + 1
-            
-            logger.info("Research workflow completed successfully")
-            
-            return final_state
-            
-        except Exception as e:
-            logger.error(f"Error running research workflow: {e}")
-            
-            # Return error state
+            logger.error(f"Workflow error: {e}")
             return {
                 "user_topic": topic,
-                "final_report": f"Error generating research report: {str(e)}",
+                "final_report": f"Error generating report: {e}",
                 "error": str(e),
-                "workflow_status": WorkflowStatus.FAILED.value
+                "workflow_status": WorkflowStatus.FAILED.value,
             }
-    
-    def run_with_callback(self, topic: str, callback=None) -> Dict[str, Any]:
-        """
-        Run the workflow with progress callback.
-        
-        Args:
-            topic: The research topic
-            callback: Optional callback function for progress updates
-            
-        Returns:
-            Final state with completed research report
-        """
+
+    def run_with_callback(self, topic: str, callback=None, compare_topic: str = None) -> Dict[str, Any]:
         if callback:
             callback("Starting research workflow...")
-        
-        # Initialize state
-        initial_state = AgentState(user_topic=topic)
-        
+
+        initial = AgentState(
+            user_topic=topic,
+            compare_topic=compare_topic,
+            is_comparison_mode=bool(compare_topic),
+        )
+        _LABELS = {
+            "planner": "Planning research approach...",
+            "researcher": "Gathering data from ArXiv, GitHub, Semantic Scholar...",
+            "rag_store": "Saving to research memory...",
+            "enrichment": "Running Citation, Visualization & Trend agents in parallel...",
+            "writer": "Writing comprehensive report...",
+            "critic": "Evaluating report quality...",
+            "human_review": "Awaiting human review...",
+        }
         try:
-            # Run the workflow with streaming
-            final_state = initial_state.dict()
-            for step in self.workflow.stream(initial_state):
+            final_state = initial.dict()
+            for step in self.workflow.stream(initial):
                 final_state.update(step)
-                
                 if callback:
-                    if "planner" in step:
-                        callback("Planning research approach...")
-                    elif "researcher" in step:
-                        callback("Gathering and synthesizing information...")
-                    elif "writer" in step:
-                        callback("Writing comprehensive report...")
-                    elif "critic" in step:
-                        callback("Evaluating report quality...")
-            
-            # Mark as completed
+                    for node in step:
+                        callback(_LABELS.get(node, f"Running {node}..."))
+
             final_state["final_report"] = final_state.get("draft_report", "No report generated")
-            final_state["current_iteration"] = final_state.get("current_iteration", 0) + 1
-            
             if callback:
                 callback("Research workflow completed!")
-            
-            logger.info("Research workflow completed successfully")
-            
             return final_state
-            
         except Exception as e:
-            logger.error(f"Error running research workflow: {e}")
-            
+            logger.error(f"Workflow stream error: {e}")
             if callback:
-                callback(f"Error: {str(e)}")
-            
-            # Return error state
+                callback(f"Error: {e}")
             return {
                 "user_topic": topic,
-                "final_report": f"Error generating research report: {str(e)}",
+                "final_report": f"Error: {e}",
                 "error": str(e),
-                "workflow_status": WorkflowStatus.FAILED.value
+                "workflow_status": WorkflowStatus.FAILED.value,
             }
+
+
+# ── fallbacks ──────────────────────────────────────────────────────────────────
+
+def _fallback_plan(topic: str) -> dict:
+    return {
+        "main_questions": [f"What is {topic}?", f"What are the key aspects of {topic}?"],
+        "sub_topics": ["Overview", "Key aspects", "Challenges", "Future trends"],
+        "search_strategies": ["Literature review", "Industry reports"],
+        "expected_sources": ["Academic papers", "Industry reports"],
+        "research_depth": 3,
+        "is_controversial": False,
+    }
+
+
+def _fallback_synthesis(topic: str) -> dict:
+    return {
+        "key_findings": [f"Research on {topic} shows active development"],
+        "supporting_evidence": [f"Multiple sources indicate growing interest in {topic}"],
+        "conflicting_information": [],
+        "source_summaries": [{"source_type": "General", "key_insights": f"Overview of {topic}", "reliability": "medium"}],
+        "data_quality_score": 0.6,
+    }
+
+
+def _fallback_report(topic: str) -> str:
+    return f"# Research Report: {topic}\n\nThis report was generated as a fallback.\n\n## Overview\n\n{topic} is an active area of research with significant ongoing developments.\n"

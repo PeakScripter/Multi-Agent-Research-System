@@ -1,14 +1,30 @@
+# ── LLM / Orchestration ───────────────────────────────────────────────────────
 langgraph
 langchain
-langchain-google-genai
+langchain-groq
+langchain-core
 python-dotenv
 pydantic
-typing-extensions
+
+# ── API server ────────────────────────────────────────────────────────────────
+fastapi
+uvicorn[standard]
+python-multipart
+
+# ── Data sources ──────────────────────────────────────────────────────────────
 arxiv
 requests
 beautifulsoup4
 feedparser
 pytz
-fastapi
-uvicorn
+youtube-transcript-api
+
+# ── Vector DB / RAG ───────────────────────────────────────────────────────────
+qdrant-client[fastembed]
+fastembed
+
+# ── Output ────────────────────────────────────────────────────────────────────
 python-docx>=1.1.0
+
+# ── Typing ────────────────────────────────────────────────────────────────────
+typing-extensions

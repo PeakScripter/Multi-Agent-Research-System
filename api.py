@@ -1,240 +1,236 @@
-"""FastAPI wrapper for the Multi-Agent Research System.
+"""FastAPI server for the Multi-Agent Research System (MARS).
 
-Provides endpoints for a chatbot that acts as a research assistant using Gemini.
-- /chat: conversational endpoint powered by Gemini; will refuse non-research queries
-- /research: start a research run using the existing workflow (can stream progress)
-- /status: model status
-- /download_report: download generated DOCX reports
+Endpoints:
+  POST /research          — full agent workflow (streaming SSE or JSON)
+  POST /chat              — conversational research assistant
+  POST /voice             — upload audio → Sarvam STT → auto-research
+  POST /tts               — text-to-speech via Sarvam
+  POST /compare           — side-by-side comparison of two topics
+  GET  /rag/search        — search past research memory (Qdrant)
+  GET  /status            — Groq model health
+  GET  /download_report/{filename}
+  GET  /documents         — list generated .docx files
 
-Run with: python -m api or uvicorn api:app --host 0.0.0.0 --port 8000
+Run: uvicorn api:app --host 0.0.0.0 --port 8000
 """
 
-from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
-from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-import uuid
-import time
 import json
 import os
+import uuid
 from types import SimpleNamespace
+from typing import Dict, List, Optional
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
-from agents import WordAgent  # <--- IMPORT ADDED
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse, Response
+from pydantic import BaseModel
+from database import save_to_history, get_all_history, get_history_by_id, delete_history
 
-# Lazy imports for heavy dependencies (done inside endpoints) to keep module import lightweight
-
-app = FastAPI(title="MARS Research Assistant API")
+app = FastAPI(title="MARS Research Assistant API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173","*"],
-    allow_origin_regex=r"^https?://localhost:\d{4}$",
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# In-memory session store: {session_id: [ {role: 'user'|'assistant'|'system', 'content': str}, ... ] }
+OUTPUTS_DIR = "outputs"
+os.makedirs(OUTPUTS_DIR, exist_ok=True)
+
 SESSIONS: Dict[str, List[Dict[str, str]]] = {}
-OUTPUTS_DIR = "outputs"  # Directory where WordAgent saves files
 
-# Ensure output directory exists
-if not os.path.exists(OUTPUTS_DIR):
-    os.makedirs(OUTPUTS_DIR)
-
-# System instruction: strictly act as a research assistant and refuse unrelated queries
 RESEARCH_SYSTEM_PROMPT = (
-    "You are a specialized research assistant. Only answer queries that are explicitly about AI ML computer science research tasks, collecting, summarizing, or analyzing information. "
-    "If the user's query is not related to research, respond with reply like 'I can only help with research-related requests.' and ask the user to rephrase as a research request. "
-    "If user talks like 'hi' or 'hello' or 'how are you', respond with 'Hello! How can I assist you with your research today?' "
-    "When asked to perform research, call the research workflow backend and return results when available. Keep answers concise and cite sources when available."
+    "You are a specialized CS/IT research assistant powered by Groq GPT-OSS 120B. "
+    "Only answer queries explicitly about AI, ML, computer science, or research tasks. "
+    "If the query is unrelated, respond: 'I can only help with research-related requests.' "
+    "For greetings, respond warmly and ask how you can help with research."
 )
 
+RESEARCH_KEYWORDS = [
+    "research", "find", "search", "summar", "paper", "papers", "literature",
+    "sources", "cite", "citations", "evidence", "survey", "review", "analyze",
+    "investigate", "collect", "provide references",
+]
+
+
+# ── Request models ─────────────────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):
-    session_id: Optional[str]
+    session_id: Optional[str] = None
     message: str
     temperature: Optional[float] = None
-    # If true and a research intent is detected, stream research progress/results
     stream: Optional[bool] = False
     generate_docx: Optional[bool] = True
 
 
 class ResearchRequest(BaseModel):
-    session_id: Optional[str]
+    session_id: Optional[str] = None
     topic: str
     stream: Optional[bool] = False
-    generate_docx: Optional[bool] = True  # <--- FIELD ADDED
+    generate_docx: Optional[bool] = True
 
 
-def ensure_session(session_id: Optional[str]) -> str:
+class CompareRequest(BaseModel):
+    topic_a: str
+    topic_b: str
+    stream: Optional[bool] = False
+    generate_docx: Optional[bool] = False
+
+
+class TTSRequest(BaseModel):
+    text: str
+    language: Optional[str] = "en-IN"
+    speaker: Optional[str] = "meera"
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+def _ensure_session(session_id: Optional[str]) -> str:
     if session_id and session_id in SESSIONS:
         return session_id
     new_id = str(uuid.uuid4())
-    # Initialize with system prompt
     SESSIONS[new_id] = [{"role": "system", "content": RESEARCH_SYSTEM_PROMPT}]
     return new_id
 
 
-# Simple heuristic keywords to detect research intent quickly
-RESEARCH_KEYWORDS = [
-    "research",
-    "find",
-    "search",
-    "summar",
-    "paper",
-    "papers",
-    "literature",
-    "sources",
-    "cite",
-    "citations",
-    "evidence",
-    "survey",
-    "review",
-    "analyze",
-    "investigate",
-    "collect",
-    "provide references",
-]
-
-
-def detect_research_intent(message: str, use_model_fallback: bool = True) -> bool:
-    """Return True if message likely requests research.
-
-    First use a lightweight keyword heuristic. If nothing decisive and use_model_fallback=True,
-    ask the Gemini client to classify the intent (YES/NO) as a fallback.
-    """
-    text = (message or "").lower()
-    # quick keyword heuristic
-    for kw in RESEARCH_KEYWORDS:
-        if kw in text:
-            return True
-
-    if not use_model_fallback:
-        return False
-
-    # Fallback: few-shot classification using Gemini for higher precision
+def _detect_research_intent(message: str) -> bool:
+    text = message.lower()
+    if any(kw in text for kw in RESEARCH_KEYWORDS):
+        return True
     try:
-        from gemini_client import gemini_client
-
-        system_prompt = (
-            "You are a strict classifier. Answer with a single word: YES or NO. "
-            "YES means the user's message requests a research task (examples: find papers, summarize literature, collect evidence, provide citations, analyze studies). "
-            "NO means the message is not a research request. Reply only with YES or NO and nothing else."
+        from groq_client import groq_client
+        resp = groq_client.generate_response(
+            system_prompt="Answer YES or NO only. Does this message request a research task?",
+            user_prompt=message,
+            temperature=0.0,
         )
-
-        # Few-shot examples to guide the classifier
-        few_shot_examples = [
-            ("Find recent papers about transformer neural networks and summarize their evaluation methods.", "YES"),
-            ("Collect citations supporting the claim that larger models generalize better.", "YES"),
-            ("Provide a literature review on transformer-based architectures for NLP.", "YES"),
-            ("Tell me a joke about transformers.", "NO"),
-            ("What's the weather in Delhi today?", "NO"),
-            ("Help me write a birthday message.", "NO"),
-        ]
-
-        examples_text = "\n".join([f"Message: {ex}\nLabel: {lbl}" for ex, lbl in few_shot_examples])
-
-        user_prompt = f"{examples_text}\n\nMessage: {message}\nLabel:"
-
-        resp = gemini_client.generate_response(system_prompt=system_prompt, user_prompt=user_prompt, temperature=0.0)
-        if not resp:
-            return False
-        r = resp.strip().lower()
-        if r.startswith("yes"):
-            return True
-        return False
+        return resp.strip().upper().startswith("YES")
     except Exception:
-        # If model call fails, default to False
         return False
 
 
-def generate_docx_for_result(result: dict) -> str:
-    """Helper to run WordAgent on a workflow result dictionary."""
+def _make_word_doc(result: dict) -> Optional[str]:
     try:
+        from agents import WordAgent
         wa = WordAgent()
-        # Create a state proxy from the result dict
-        state_proxy = SimpleNamespace(
-            final_report=result.get('final_report'),
-            draft_report=result.get('draft_report'),
-            user_topic=result.get('user_topic', 'Research Report')
+        proxy = SimpleNamespace(
+            final_report=result.get("final_report"),
+            draft_report=result.get("draft_report"),
+            user_topic=result.get("user_topic", "Research Report"),
         )
-        wa_output = wa.convert_to_word(state_proxy)
-        return wa_output.get("filename") # Return just the filename for the URL
+        out = wa.convert_to_word(proxy)
+        return out.get("filename")
     except Exception as e:
-        print(f"Error generating DOCX: {e}")
+        print(f"WordAgent error: {e}")
         return None
 
 
+def _sse(payload: dict) -> str:
+    return f"data: {json.dumps(payload)}\n\n"
+
+
+# ── /research ──────────────────────────────────────────────────────────────────
+
+@app.post("/research")
+async def research(req: ResearchRequest):
+    session_id = _ensure_session(req.session_id)
+
+    from workflow import MultiAgentResearchWorkflow
+    wf = MultiAgentResearchWorkflow()
+
+    if req.stream:
+        return StreamingResponse(_stream_workflow_gen(wf, req.topic, req.generate_docx), media_type="text/event-stream")
+
+    result = wf.run(req.topic)
+    if req.generate_docx:
+        fname = _make_word_doc(result)
+        if fname:
+            result["docx_filename"] = fname
+            result["download_url"] = f"/download_report/{fname}"
+    SESSIONS[session_id].append({"role": "assistant", "content": result.get("final_report", "")})
+    
+    # Save to history
+    report_id = str(uuid.uuid4())
+    save_to_history(report_id, req.topic, result)
+    
+    return JSONResponse({"session_id": session_id, "report_id": report_id, "result": _serialisable(result)})
+
+
+def _stream_workflow_gen(wf, topic: str, generate_docx: bool):
+    """SSE generator that streams progress then final result."""
+    _LABELS = {
+        "planner": "Planning research approach...",
+        "researcher": "Gathering data from ArXiv, GitHub, Semantic Scholar...",
+        "rag_store": "Checking research memory (Qdrant)...",
+        "enrichment": "Running Citation, Visualization & Trend agents in parallel...",
+        "writer": "Writing comprehensive report...",
+        "critic": "Evaluating report quality...",
+        "human_review": "Awaiting human review...",
+    }
+    from models import AgentState
+    initial = AgentState(user_topic=topic)
+    final_state = initial.dict()
+    try:
+        for step in wf.workflow.stream(initial):
+            # Flatten updates into final_state
+            for node, updates in step.items():
+                if isinstance(updates, dict):
+                    final_state.update(updates)
+                
+                label = _LABELS.get(node, f"Running {node}...")
+                yield _sse({"type": "progress", "message": label, "node": node})
+
+        final_state["final_report"] = final_state.get("draft_report", "No report generated")
+
+        if generate_docx:
+            yield _sse({"type": "progress", "message": "Generating Word document..."})
+            fname = _make_word_doc(final_state)
+            if fname:
+                final_state["docx_filename"] = fname
+                final_state["download_url"] = f"/download_report/{fname}"
+
+
+        # Save to history
+        report_id = str(uuid.uuid4())
+        save_to_history(report_id, topic, final_state)
+        
+        yield _sse({"type": "result", "report_id": report_id, "result": _serialisable(final_state)})
+    except Exception as e:
+        yield _sse({"type": "error", "error": str(e)})
+
+
+
+# ── /chat ──────────────────────────────────────────────────────────────────────
+
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    """Conversational endpoint using Gemini but constrained to research-only behavior."""
-    session_id = ensure_session(req.session_id)
+    session_id = _ensure_session(req.session_id)
     history = SESSIONS[session_id]
-
-    # Append user message
     history.append({"role": "user", "content": req.message})
-    # Detect research intent
-    is_research = detect_research_intent(req.message)
 
-    if is_research:
-        # If user requested research, trigger the workflow. Support streaming if requested.
+    if _detect_research_intent(req.message):
         from workflow import MultiAgentResearchWorkflow
-        workflow = MultiAgentResearchWorkflow()
-
-        # Stream via SSE if requested
+        wf = MultiAgentResearchWorkflow()
         if req.stream:
-            def progress_generator():
-                def callback(msg: str):
-                    payload = json.dumps({"type": "progress", "message": msg})
-                    nonlocal last_yield
-                    last_yield = f"data: {payload}\n\n"
+            return StreamingResponse(
+                _stream_workflow_gen(wf, req.message, req.generate_docx),
+                media_type="text/event-stream",
+            )
+        result = wf.run(req.message)
+        if req.generate_docx:
+            fname = _make_word_doc(result)
+            if fname:
+                result["docx_filename"] = fname
+                result["download_url"] = f"/download_report/{fname}"
+        text = result.get("final_report") or result.get("draft_report") or "Research completed"
+        history.append({"role": "assistant", "content": text})
+        return JSONResponse({"session_id": session_id, "reply": text, "result": _serialisable(result)})
 
-                last_yield = ""
-                try:
-                    result = workflow.run_with_callback(req.message, callback)
-                    
-                    # --- DOCX Generation Logic for Stream ---
-                    if req.generate_docx:
-                        yield f"data: {json.dumps({'type': 'progress', 'message': 'Generating Word Document...'})}\n\n"
-                        docx_filename = generate_docx_for_result(result)
-                        if docx_filename:
-                            result['docx_filename'] = docx_filename
-                            result['download_url'] = f"/download_report/{docx_filename}"
-                            yield f"data: {json.dumps({'type': 'progress', 'message': f'Document ready: {docx_filename}'})}\n\n"
-                    # ----------------------------------------
-                    
-                    payload = json.dumps({"type": "result", "result": result})
-                    yield f"data: {payload}\n\n"
-                except Exception as e:
-                    payload = json.dumps({"type": "error", "error": str(e)})
-                    yield f"data: {payload}\n\n"
-
-            return StreamingResponse(progress_generator(), media_type="text/event-stream")
-
-        # Non-streaming: run synchronously
-        try:
-            result = workflow.run(req.message)
-            
-            # --- DOCX Generation Logic for Non-Stream ---
-            if req.generate_docx:
-                docx_filename = generate_docx_for_result(result)
-                if docx_filename:
-                    result['docx_filename'] = docx_filename
-                    result['download_url'] = f"/download_report/{docx_filename}"
-            # --------------------------------------------
-
-            assistant_text = result.get('final_report') or result.get('draft_report') or "Research completed"
-            history.append({"role": "assistant", "content": assistant_text})
-            return JSONResponse({"session_id": session_id, "reply": assistant_text, "result": result})
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
-
-    # Otherwise, normal conversational flow via Gemini
+    from groq_client import groq_client
     try:
-        from gemini_client import gemini_client
-
-        response_text = gemini_client.generate_response(
+        reply = groq_client.generate_response(
             system_prompt=RESEARCH_SYSTEM_PROMPT,
             user_prompt=req.message,
             temperature=req.temperature,
@@ -242,117 +238,201 @@ async def chat(req: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    # Normalize refusals
-    refusal_phrases = ["I can only help with research-related requests", "I can only help with research"]
-    if any(p.lower() in response_text.lower() for p in refusal_phrases):
-        history.append({"role": "assistant", "content": response_text})
-        return JSONResponse({"session_id": session_id, "reply": response_text, "refusal": True})
-
-    history.append({"role": "assistant", "content": response_text})
-    return JSONResponse({"session_id": session_id, "reply": response_text, "refusal": False})
+    history.append({"role": "assistant", "content": reply})
+    refusal = "i can only help with research" in reply.lower()
+    return JSONResponse({"session_id": session_id, "reply": reply, "refusal": refusal})
 
 
-@app.post("/research")
-async def research(req: ResearchRequest):
-    """Trigger the research workflow. If stream=True, stream progress via SSE; else run and return final report JSON."""
-    session_id = ensure_session(req.session_id)
-    # Lazy import workflow to avoid heavy imports at module import time
-    from workflow import MultiAgentResearchWorkflow
-    workflow = MultiAgentResearchWorkflow()
+# ── /voice ─────────────────────────────────────────────────────────────────────
 
-    def progress_generator():
-        # Streaming generator for Server-Sent Events
-        # Callback style: yield progress messages as they come from the workflow
-        def callback(msg: str):
-            payload = json.dumps({"type": "progress", "message": msg})
-            # SSE format: data: <json>\n\n
-            nonlocal last_yield
-            last_yield = f"data: {payload}\n\n"
-
-        last_yield = ""
-
-        try:
-            # Start research with callback
-            result = workflow.run_with_callback(req.topic, callback)
-            
-            # --- DOCX Generation Logic for Stream ---
-            if req.generate_docx:
-                yield f"data: {json.dumps({'type': 'progress', 'message': 'Generating Word Document...'})}\n\n"
-                docx_filename = generate_docx_for_result(result)
-                if docx_filename:
-                    result['docx_filename'] = docx_filename
-                    result['download_url'] = f"/download_report/{docx_filename}"
-                    yield f"data: {json.dumps({'type': 'progress', 'message': f'Document ready: {docx_filename}'})}\n\n"
-            # ----------------------------------------
-
-            # After completion, send final report
-            payload = json.dumps({"type": "result", "result": result})
-            yield f"data: {payload}\n\n"
-        except Exception as e:
-            payload = json.dumps({"type": "error", "error": str(e)})
-            yield f"data: {payload}\n\n"
-
-    if req.stream:
-        return StreamingResponse(progress_generator(), media_type="text/event-stream")
-
-    # Non-streaming: run synchronously
+@app.post("/voice")
+async def voice_research(
+    file: UploadFile = File(...),
+    language: Optional[str] = None,
+    mode: str = "transcribe",
+    auto_research: bool = True,
+    stream: bool = False,
+):
+    """Upload audio → Sarvam STT → optional auto-research trigger."""
+    audio_bytes = await file.read()
     try:
-        result = workflow.run(req.topic)
-        
-        # --- DOCX Generation Logic for Non-Stream ---
-        if req.generate_docx:
-            docx_filename = generate_docx_for_result(result)
-            if docx_filename:
-                result['docx_filename'] = docx_filename
-                result['download_url'] = f"/download_report/{docx_filename}"
-        # --------------------------------------------
-        
-        # Save to session history as assistant message
-        SESSIONS[session_id].append({"role": "assistant", "content": result.get('final_report', '')})
-        return JSONResponse({"session_id": session_id, "result": result})
+        from voice.sarvam_stt import SarvamSTT
+        stt = SarvamSTT()
+        transcript = stt.transcribe(
+            audio_bytes=audio_bytes,
+            filename=file.filename or "audio.wav",
+            language=language,
+            mode=mode,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"STT failed: {e}")
+
+    if not auto_research:
+        return JSONResponse({"transcript": transcript})
+
+    from workflow import MultiAgentResearchWorkflow
+    wf = MultiAgentResearchWorkflow()
+    if stream:
+        return StreamingResponse(
+            _voice_stream(transcript, wf),
+            media_type="text/event-stream",
+        )
+    result = wf.run(transcript)
+    return JSONResponse({"transcript": transcript, "result": _serialisable(result)})
+
+
+def _voice_stream(transcript: str, wf):
+    yield _sse({"type": "transcript", "text": transcript})
+    yield from _stream_workflow_gen(wf, transcript, generate_docx=False)
+
+
+# ── /tts ───────────────────────────────────────────────────────────────────────
+
+@app.post("/tts")
+async def text_to_speech(req: TTSRequest):
+    """Convert text to speech using Sarvam AI and return WAV audio bytes."""
+    try:
+        from voice.sarvam_tts import SarvamTTS
+        tts = SarvamTTS()
+        audio = tts.synthesize(req.text, language=req.language, speaker=req.speaker)
+        return Response(content=audio, media_type="audio/wav")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TTS failed: {e}")
+
+
+# ── /compare ───────────────────────────────────────────────────────────────────
+
+@app.post("/compare")
+async def compare_topics(req: CompareRequest):
+    """Research two topics in parallel and return a side-by-side comparison."""
+    from workflow import MultiAgentResearchWorkflow
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _run(topic: str):
+        return MultiAgentResearchWorkflow().run(topic)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        fut_a = pool.submit(_run, req.topic_a)
+        fut_b = pool.submit(_run, req.topic_b)
+        result_a = fut_a.result()
+        result_b = fut_b.result()
+
+    if req.generate_docx:
+        for r in (result_a, result_b):
+            fname = _make_word_doc(r)
+            if fname:
+                r["docx_filename"] = fname
+                r["download_url"] = f"/download_report/{fname}"
+
+    return JSONResponse({
+        "topic_a": req.topic_a,
+        "topic_b": req.topic_b,
+        "result_a": _serialisable(result_a),
+        "result_b": _serialisable(result_b),
+    })
+
+
+# ── /rag/search ────────────────────────────────────────────────────────────────
+
+@app.get("/rag/search")
+async def rag_search(q: str = Query(..., min_length=2), limit: int = Query(5, ge=1, le=20)):
+    """Search the Qdrant research memory for similar past research."""
+    try:
+        from rag.qdrant_store import research_memory
+        hits = research_memory.search(q, limit=limit)
+        return JSONResponse({"query": q, "hits": hits, "count": len(hits)})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/download_report/{filename}")
-async def download_report(filename: str):
-    """Endpoint to retrieve the generated DOCX file."""
-    # Security check: ensure filename doesn't have directory traversal
-    if ".." in filename or "/" in filename or "\\" in filename:
-        raise HTTPException(status_code=400, detail="Invalid filename")
-        
-    file_path = os.path.join(OUTPUTS_DIR, filename)
-    
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-        
-    return FileResponse(
-        path=file_path, 
-        filename=filename, 
-        media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    )
+@app.get("/rag/recent")
+async def rag_recent(limit: int = Query(10, ge=1, le=50)):
+    """List the most recent research entries stored in Qdrant."""
+    try:
+        from rag.qdrant_store import research_memory
+        hits = research_memory.list_recent(limit=limit)
+        return JSONResponse({"hits": hits, "count": len(hits)})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
+
+# ── /history ──────────────────────────────────────────────────────────────────
+
+@app.get("/history")
+async def list_history():
+    """Get all past research topics and IDs."""
+    return get_all_history()
+
+
+@app.get("/history/{id}")
+async def get_history_item(id: str):
+    """Retrieve a specific past research result."""
+    item = get_history_by_id(id)
+    if not item:
+        raise HTTPException(status_code=404, detail="History item not found")
+    return item
+
+
+@app.delete("/history/{id}")
+async def remove_history_item(id: str):
+    """Delete a specific history item."""
+    delete_history(id)
+    return {"status": "deleted"}
+
+
+# ── /status ────────────────────────────────────────────────────────────────────
 
 @app.get("/status")
 async def status():
-    from gemini_client import gemini_client
-    return gemini_client.get_model_status()
+    from groq_client import groq_client
+    return groq_client.get_model_status()
+
+
+# ── /download_report ───────────────────────────────────────────────────────────
+
+@app.get("/download_report/{filename}")
+async def download_report(filename: str):
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    path = os.path.join(OUTPUTS_DIR, filename)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(
+        path=path,
+        filename=filename,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+
+@app.get("/documents")
+async def list_documents():
+    return [f for f in os.listdir(OUTPUTS_DIR) if f.endswith(".docx")]
+
 
 @app.get("/")
 def root():
-    return {"message": "MARS Research Assistant API is running."}
-
-#get all documents for user
-@app.get("/documents")
-async def list_documents():
-    documents = []
-    for filename in os.listdir(OUTPUTS_DIR):
-        if filename.endswith(".docx"):
-            documents.append(filename)
-    return documents
+    return {
+        "message": "MARS Research Assistant API v2.0",
+        "model": "Groq GPT-OSS 120B",
+        "endpoints": ["/research", "/chat", "/voice", "/tts", "/compare", "/rag/search", "/status"],
+    }
 
 
-# Simple uvicorn runner convenience
+# ── Utility ────────────────────────────────────────────────────────────────────
+
+def _serialisable(obj):
+    """Strip non-serialisable values (e.g. datetime) from dicts."""
+    if isinstance(obj, dict):
+        return {k: _serialisable(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_serialisable(i) for i in obj]
+    try:
+        json.dumps(obj)
+        return obj
+    except (TypeError, ValueError):
+        return str(obj)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=False)

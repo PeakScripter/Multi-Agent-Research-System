@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-deep: #0b1326;
+  --surface-low: #131b2e;
+  --surface: #171f33;
+  --surface-high: #222a3d;
+  --primary: #c0c1ff;
+  --primary-container: #4b4dd8;
+  --secondary: #4fdbc8;
+  --on-surface: #dae2fd;
+  --on-surface-variant: #c7c4d8;
+  --outline: #464555;
+}
+
+@layer base {
+  body {
+    @apply bg-[#0b1326] text-[#dae2fd] antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1, h2, h3, h4, .font-serif {
+    font-family: 'Newsreader', serif;
+  }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-[#464555]/50 rounded-full hover:bg-[#4fdbc8]/50 transition-colors; }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-[#171f33]/60 backdrop-blur-xl border border-white/5 shadow-2xl;
+  }
+
+  .glass-card {
+    @apply bg-[#131b2e]/40 backdrop-blur-md border border-white/5 hover:border-white/10 transition-all duration-300;
+  }
+
+  .neon-accent {
+    @apply shadow-[0_0_15px_rgba(79,219,200,0.3)];
+  }
+
+  .premium-gradient {
+    @apply bg-gradient-to-br from-[#c0c1ff] to-[#4b4dd8];
+  }
+
+  .stealth-input {
+    @apply bg-[#060e20]/50 border border-[#464555]/30 focus:border-[#4fdbc8] focus:ring-1 focus:ring-[#4fdbc8] transition-all outline-none;
+  }
+
+  .node-idle    { @apply fill-[#464555] stroke-[#918fa1]; }
+  .node-active  { @apply fill-[#4b4dd8] stroke-[#c0c1ff]; animation: nodeGlow 1.5s ease-in-out infinite alternate; }
+  .node-done    { @apply fill-[#04b4a2] stroke-[#4fdbc8]; }
+  .node-error   { @apply fill-[#93000a] stroke-[#ffb4ab]; }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/5 backdrop-blur-sm border border-white/10;
+  }
+}
+
+@keyframes nodeGlow {
+  from { filter: drop-shadow(0 0 4px #4b4dd8); }
+  to   { filter: drop-shadow(0 0 15px #c0c1ff); }
+}
+
+/* Mermaid diagram dark theme override */
+.mermaid svg {
+  background: transparent !important;
+}
+
+.mermaid text {
+  @apply fill-[#dae2fd] !important;
+  font-family: 'Inter', sans-serif !important;
+}

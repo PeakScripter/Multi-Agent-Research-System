@@ -9,7 +9,7 @@ from types import SimpleNamespace  # Used to mimic AgentState for WordAgent
 
 from workflow import MultiAgentResearchWorkflow
 from config import REPORTS_DIR, LOGS_DIR, CS_IT_DOMAIN_ONLY
-from gemini_client import gemini_client
+from groq_client import groq_client as gemini_client
 from data_sources import CSResearchFetcher
 from agents import WordAgent  # <--- IMPORT ADDED
 

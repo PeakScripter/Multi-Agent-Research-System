@@ -1,42 +1,26 @@
 [
     {
-        "name": "gemini-2.5-flash",
-        "api_key": "GOOGLE_API_KEY",
+        "name": "openai/gpt-oss-120b",
+        "api_key": "GROQ_API_KEY",
         "temperature": 0.7,
-        "max_tokens": 10000,
+        "max_tokens": 8192,
         "priority": 1,
-        "description": "Fast and efficient model for quick responses"
+        "description": "OpenAI GPT-OSS 120B — flagship open-weight MoE, 120B params, 5.1B active"
     },
     {
-        "name": "gemini-2.5-pro",
-        "api_key": "GOOGLE_API_KEY",
+        "name": "llama-3.3-70b-versatile",
+        "api_key": "GROQ_API_KEY",
         "temperature": 0.7,
-        "max_tokens": 10000,
+        "max_tokens": 8192,
         "priority": 2,
-        "description": "Most capable model for complex tasks"
+        "description": "Llama 3.3 70B Versatile — strong open-source fallback"
     },
     {
-        "name": "gemini-2.0-flash",
-        "api_key": "GOOGLE_API_KEY",
+        "name": "meta-llama/llama-4-scout-17b-16e-instruct",
+        "api_key": "GROQ_API_KEY",
         "temperature": 0.7,
-        "max_tokens": 10000,
+        "max_tokens": 8192,
         "priority": 3,
-        "description": "Balanced model for general use"
-    },
-    {
-        "name": "gemini-2.5-flash-lite",
-        "api_key": "GOOGLE_API_KEY",
-        "temperature": 0.7,
-        "max_tokens": 10000,
-        "priority": 4,
-        "description": "Lightweight model for simple tasks"
-    },
-    {
-        "name": "gemini-2.0-flash-lite",
-        "api_key": "GOOGLE_API_KEY",
-        "temperature": 0.7,
-        "max_tokens": 10000,
-        "priority": 5,
-        "description": "Ultra-lightweight model for basic tasks"
+        "description": "Llama 4 Scout 17Bx16E — fast MoE model at 750 tok/s"
     }
 ]

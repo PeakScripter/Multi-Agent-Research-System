@@ -3,7 +3,7 @@
 import logging
 import json
 from typing import Dict, Any, Literal
-from gemini_client import gemini_client
+from groq_client import groq_client as gemini_client
 from models import AgentState, CritiqueResult
 
 logger = logging.getLogger(__name__)

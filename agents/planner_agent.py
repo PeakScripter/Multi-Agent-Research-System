@@ -3,9 +3,8 @@
 import logging
 import json
 from typing import Dict, Any
-from gemini_client import gemini_client
+from groq_client import groq_client as gemini_client
 from models import AgentState, ResearchPlan
-from config import CS_IT_DOMAIN_ONLY, CS_IT_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +51,10 @@ Your research plans should be:
 - Focused on CS/IT domains and applications
 - Include both academic and industry perspectives
 - Emphasize recent developments and trends
-- Practical and actionable for CS/IT professionals"""
+- Practical and actionable for CS/IT professionals
+
+IMPORTANT: Analyze if the topic involves significant technical trade-offs, competing standards (e.g., GraphQL vs REST), ethical concerns, or rapidly evolving paradigms where consensus is lacking. If the research would benefit from seeing "both sides" of a technical decision, set "is_controversial" to true. This triggers the Debate Agent.
+"""
 
         user_prompt = f"""
 Create a comprehensive CS/IT research plan for the following topic: "{state.user_topic}"
@@ -78,6 +80,7 @@ Format your response as a JSON object with these exact keys:
 - "search_strategies": [list of CS/IT search strategies]
 - "expected_sources": [list of expected CS/IT source types]
 - "research_depth": [integer from 1-5]
+- "is_controversial": [boolean, true if there are major technical debates or conflicting viewpoints]
 
 Example:
 {{
@@ -85,7 +88,8 @@ Example:
   "sub_topics": ["Core algorithms", "Implementation approaches", "Performance optimization", "Security considerations"],
   "search_strategies": ["ArXiv paper analysis", "GitHub repository review", "Industry case studies", "Technical documentation review"],
   "expected_sources": ["ArXiv papers", "GitHub repositories", "IEEE/ACM publications", "Technical blogs", "Open source projects"],
-  "research_depth": 4
+  "research_depth": 4,
+  "is_controversial": true
 }}
 """
 
@@ -168,7 +172,8 @@ Example:
                 "News articles",
                 "Expert interviews"
             ],
-            "research_depth": 3
+            "research_depth": 3,
+            "is_controversial": False
         }
     
     def refine_plan(self, state: AgentState, feedback: str) -> Dict[str, Any]:
