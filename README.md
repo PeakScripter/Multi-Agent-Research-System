@@ -103,7 +103,7 @@ npm run dev
 
 ### Option B: Standalone UI
 A lightweight, single-file frontend for quick access.
-1. Start the backend: `python api.py`
+1. Start the backend: `python app.py`
 2. Open `index_1.html` directly in your browser.
 
 ---
@@ -112,7 +112,7 @@ A lightweight, single-file frontend for quick access.
 
 Start the server using Uvicorn:
 ```bash
-python -m uvicorn api:app --host 0.0.0.0 --port 8000
+python -m uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
 | Endpoint | Method | Description |
@@ -131,7 +131,7 @@ python -m uvicorn api:app --host 0.0.0.0 --port 8000
 - `rag/` — Vector database integration (Qdrant).
 - `voice/` — Speech-to-text and Text-to-speech modules.
 - `outputs/` — Stores generated reports, logs, and metadata.
-- `api.py` — FastAPI server implementation.
+- `app.py` — FastAPI server implementation.
 - `workflow.py` — LangGraph state machine definition.
 
 ---

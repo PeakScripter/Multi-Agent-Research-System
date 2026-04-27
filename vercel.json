@@ -1,14 +1,14 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/research", "destination": "/api.py" },
-    { "source": "/chat", "destination": "/api.py" },
-    { "source": "/voice", "destination": "/api.py" },
-    { "source": "/tts", "destination": "/api.py" },
-    { "source": "/compare", "destination": "/api.py" },
-    { "source": "/rag/(.*)", "destination": "/api.py" },
-    { "source": "/status", "destination": "/api.py" },
-    { "source": "/documents", "destination": "/api.py" },
+    { "source": "/research", "destination": "/app.py" },
+    { "source": "/chat", "destination": "/app.py" },
+    { "source": "/voice", "destination": "/app.py" },
+    { "source": "/tts", "destination": "/app.py" },
+    { "source": "/compare", "destination": "/app.py" },
+    { "source": "/rag/(.*)", "destination": "/app.py" },
+    { "source": "/status", "destination": "/app.py" },
+    { "source": "/documents", "destination": "/app.py" },
     { "source": "/(.*)", "destination": "/frontend/dist/$1" },
     { "source": "/(.*)", "destination": "/frontend/dist/index.html" }
   ]
