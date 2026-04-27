@@ -1,135 +1,217 @@
-import { useCallback, useEffect } from "react";
-import {
-  ReactFlow,
-  Background,
-  useNodesState,
-  useEdgesState,
-  MarkerType,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
+import { useMemo } from "react";
 
-const NODE_META = [
-  { id: "planner",     label: "🗺 Planner",      x: 100,  y: 200 },
-  { id: "researcher",  label: "🔍 Researcher",   x: 300,  y: 200 },
-  { id: "rag_store",   label: "🧠 RAG Store",    x: 500,  y: 200 },
-  { id: "enrichment",  label: "⚡ Enrichment",   x: 700,  y: 200 },
-  { id: "writer",      label: "✍️ Writer",       x: 900,  y: 200 },
-  { id: "critic",      label: "🔎 Critic",       x: 1100, y: 200 },
+const AGENTS = [
+  { id: 'planner',    label: 'Planner',    sub: 'Strategic blueprint', symbol: '◈' },
+  { id: 'researcher', label: 'Researcher', sub: 'Deep web synthesis',  symbol: '⊕' },
+  { id: 'rag_store',  label: 'RAG Store',  sub: 'Vector memory',       symbol: '⬡' },
+  { id: 'enrichment', label: 'Enrichment', sub: 'Data augmentation',   symbol: '⊗' },
+  { id: 'writer',     label: 'Writer',     sub: 'Report synthesis',    symbol: '✦' },
+  { id: 'critic',     label: 'Critic',     sub: 'Quality assurance',   symbol: '◎' },
 ];
 
-// Enrichment sub-nodes
-const SUB_NODES = [
-  { id: "citation",       label: "📚 Citations",   x: 620, y: 50  },
-  { id: "visualization",  label: "📊 Diagrams",    x: 780, y: 50  },
-  { id: "trend",          label: "📈 Trends",      x: 700, y: 360 },
-  { id: "debate",         label: "⚖️ Debate",     x: 700, y: 440 },
+const SUB_AGENTS = [
+  { label: 'Citations',     symbol: '§' },
+  { label: 'Diagrams',      symbol: '⌗' },
+  { label: 'Trends',        symbol: '↗' },
+  { label: 'Perspectives',  symbol: '⇌' },
 ];
 
-const EDGES_MAIN = [
-  ["planner", "researcher"],
-  ["researcher", "rag_store"],
-  ["rag_store", "enrichment"],
-  ["enrichment", "writer"],
-  ["writer", "critic"],
-];
-
-const EDGES_SUB = [
-  ["enrichment", "citation"],
-  ["enrichment", "visualization"],
-  ["enrichment", "trend"],
-  ["enrichment", "debate"],
-];
-
-function nodeStyle(id, active, completed) {
-  if (id === active)        return { 
-    background: "#4b4dd8", 
-    color: "#fff", 
-    border: "2px solid #c0c1ff", 
-    boxShadow: "0 0 25px #4b4dd8",
-    transform: "scale(1.1)"
-  };
-  if (completed.includes(id)) return { 
-    background: "#04b4a2", 
-    color: "#fff", 
-    border: "2px solid #4fdbc8",
-    boxShadow: "0 0 15px rgba(79, 219, 200, 0.3)"
-  };
-  return { 
-    background: "rgba(23, 31, 51, 0.6)", 
-    color: "#918fa1", 
-    border: "1px solid rgba(70, 69, 85, 0.3)",
-    backdropFilter: "blur(10px)"
-  };
+function getNodeState(id, activeNode, completedNodes) {
+  if (id === activeNode) return 'active';
+  if (completedNodes.includes(id)) return 'done';
+  return 'idle';
 }
 
-function buildNodes(active, completed) {
-  const all = [...NODE_META, ...SUB_NODES];
-  return all.map(({ id, label, x, y }) => ({
-    id,
-    position: { x, y },
-    data: { label },
-    style: {
-      ...nodeStyle(id, active, completed),
-      borderRadius: 12,
-      padding: "10px 16px",
-      fontSize: 12,
-      fontWeight: 700,
-      minWidth: 140,
-      textAlign: "center",
-      transition: "all 0.5s cubic-bezier(0.4, 0, 0.2, 1)",
+function ConnectorLine({ state }) {
+  return (
+    <div style={{
+      position: 'relative',
+      width: 56,
+      height: 1,
+      alignSelf: 'center',
+      background: state === 'done'
+        ? 'rgba(46,196,176,0.4)'
+        : 'var(--border)',
+      overflow: 'hidden',
+    }}>
+      {state === 'active' && (
+        <div style={{
+          position: 'absolute',
+          top: -1,
+          left: 0,
+          width: 60,
+          height: 3,
+          background: 'linear-gradient(90deg, transparent, var(--purple), transparent)',
+          animation: 'scan-flow 1.4s infinite',
+        }} />
+      )}
+    </div>
+  );
+}
+
+function AgentNode({ agent, state }) {
+  const nodeStyles = {
+    idle: {
+      background: 'var(--bg-raised)',
+      border: '1px solid var(--border)',
+      symbolColor: 'var(--text-3)',
     },
-  }));
+    active: {
+      background: 'rgba(139,124,246,0.1)',
+      border: '1.5px solid var(--purple)',
+      symbolColor: 'var(--purple)',
+    },
+    done: {
+      background: 'rgba(46,196,176,0.1)',
+      border: '1.5px solid var(--teal)',
+      symbolColor: 'var(--teal)',
+    },
+  };
+
+  const s = nodeStyles[state];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+      {/* Circle */}
+      <div style={{ position: 'relative' }}>
+        {/* Expanding ring for active */}
+        {state === 'active' && (
+          <div style={{
+            position: 'absolute',
+            inset: -4,
+            borderRadius: '50%',
+            border: '1.5px solid var(--purple)',
+            animation: 'ring-expand 1.8s infinite',
+            pointerEvents: 'none',
+          }} />
+        )}
+        <div style={{
+          width: 48,
+          height: 48,
+          borderRadius: '50%',
+          background: s.background,
+          border: s.border,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: state === 'done' ? 16 : 18,
+          color: s.symbolColor,
+          transition: 'all 0.35s ease',
+          ...(state === 'active' ? { animation: 'agent-pulse 1.8s infinite' } : {}),
+        }}>
+          {state === 'done' ? '✓' : agent.symbol}
+        </div>
+      </div>
+
+      {/* Label */}
+      <div style={{ textAlign: 'center' }}>
+        <div style={{
+          fontSize: 11,
+          fontWeight: 600,
+          fontFamily: 'var(--font-ui)',
+          color: state === 'active' ? 'var(--text-1)' : state === 'done' ? 'var(--teal)' : 'var(--text-2)',
+          transition: 'color 0.3s',
+        }}>{agent.label}</div>
+        <div style={{
+          fontSize: 9,
+          fontFamily: 'var(--font-mono)',
+          color: 'var(--text-3)',
+          marginTop: 2,
+        }}>{agent.sub}</div>
+      </div>
+    </div>
+  );
 }
 
-const EDGE_STYLE = { stroke: "#464555", strokeWidth: 2, opacity: 0.4 };
-const ACTIVE_EDGE = { stroke: "#c0c1ff", strokeWidth: 3, strokeDasharray: "8 4", animated: true };
+export default function AgentGraph({ activeNode, completedNodes = [] }) {
+  const enrichmentState = getNodeState('enrichment', activeNode, completedNodes);
+  const subActive = enrichmentState === 'active' || enrichmentState === 'done';
 
-function buildEdges(active, completed) {
-  const allEdges = [
-    ...EDGES_MAIN.map(([s, t]) => ({ id: `${s}-${t}`, source: s, target: t })),
-    ...EDGES_SUB.map(([s, t]) => ({ id: `${s}-${t}`, source: s, target: t })),
-  ];
-  return allEdges.map((e) => {
-    const isActive = e.source === active || e.target === active;
-    const isDone = completed.includes(e.source) && completed.includes(e.target);
-    return {
-      ...e,
-      markerEnd: { 
-        type: MarkerType.ArrowClosed, 
-        color: isActive ? "#c0c1ff" : isDone ? "#4fdbc8" : "#464555" 
-      },
-      style: isActive ? ACTIVE_EDGE : isDone ? { stroke: "#4fdbc8", strokeWidth: 2 } : EDGE_STYLE,
-      animated: isActive,
-    };
-  });
-}
+  // Determine connector state between each pair
+  const connectorStates = useMemo(() => {
+    return AGENTS.slice(0, -1).map((agent, i) => {
+      const nextAgent = AGENTS[i + 1];
+      const curState = getNodeState(agent.id, activeNode, completedNodes);
+      const nextState = getNodeState(nextAgent.id, activeNode, completedNodes);
 
-export default function AgentGraph({ activeNode, completedNodes }) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(buildNodes(null, []));
-  const [edges, setEdges, onEdgesChange] = useEdgesState(buildEdges(null, []));
-
-  useEffect(() => {
-    setNodes(buildNodes(activeNode, completedNodes));
-    setEdges(buildEdges(activeNode, completedNodes));
+      if (curState === 'done' && (nextState === 'done' || nextState === 'active')) return 'done';
+      if (nextState === 'active') return 'active';
+      return 'idle';
+    });
   }, [activeNode, completedNodes]);
 
   return (
-    <div className="w-full h-full bg-[#0b1326] relative">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        fitView
-        fitViewOptions={{ padding: 0.2 }}
-        minZoom={0.2}
-        proOptions={{ hideAttribution: true }}
-      >
-        <Background color="#464555" gap={25} size={1} />
-      </ReactFlow>
-      
-      {/* Decorative Overlay */}
-      <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-[#0b1326] via-transparent to-transparent opacity-60" />
+    <div style={{
+      width: '100%',
+      height: '100%',
+      background: 'var(--bg)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px 16px',
+      gap: 20,
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      {/* Background dots */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        backgroundImage: 'radial-gradient(circle, var(--text-3) 0.5px, transparent 0.5px)',
+        backgroundSize: '24px 24px',
+        opacity: 0.15,
+        pointerEvents: 'none',
+      }} />
+
+      {/* Pipeline */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 0,
+        position: 'relative',
+        zIndex: 1,
+      }}>
+        {AGENTS.map((agent, i) => (
+          <div key={agent.id} style={{ display: 'flex', alignItems: 'flex-start' }}>
+            <AgentNode agent={agent} state={getNodeState(agent.id, activeNode, completedNodes)} />
+            {i < AGENTS.length - 1 && (
+              <div style={{ paddingTop: 24 }}>
+                <ConnectorLine state={connectorStates[i]} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Sub-agents row */}
+      <div style={{
+        display: 'flex',
+        gap: 8,
+        justifyContent: 'center',
+        transition: 'opacity 0.4s ease',
+        opacity: subActive ? 1 : 0.35,
+      }}>
+        {SUB_AGENTS.map((sa) => (
+          <div key={sa.label} style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '5px 12px',
+            borderRadius: 20,
+            background: 'var(--bg-raised)',
+            border: `1px solid ${subActive ? 'rgba(46,196,176,0.3)' : 'var(--border)'}`,
+            fontSize: 10,
+            fontFamily: 'var(--font-ui)',
+            fontWeight: 500,
+            color: subActive ? 'var(--teal)' : 'var(--text-3)',
+            transition: 'all 0.4s ease',
+          }}>
+            <span style={{ fontSize: 12 }}>{sa.symbol}</span>
+            {sa.label}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -1,47 +1,33 @@
 import { useEffect, useRef } from "react";
-import { Loader2, Terminal } from "lucide-react";
 
 export default function ProgressFeed({ logs, running }) {
   const bottomRef = useRef(null);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs]);
-
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
   if (!logs.length && !running) return null;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Terminal size={14} className="text-secondary" />
-          <h3 className="text-[10px] font-bold text-on-surface-variant uppercase tracking-[0.2em]">Neural Link Status</h3>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, color: 'var(--text-3)' }}>▸</span>
+          <h3 style={{ fontSize: 9, fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.15em', margin: 0 }}>Neural Link Status</h3>
         </div>
-        {running && <div className="w-2 h-2 rounded-full bg-secondary animate-pulse shadow-[0_0_8px_#4fdbc8]" />}
+        {running && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--teal)', boxShadow: '0 0 8px var(--teal)', animation: 'blink-dot 1.2s infinite' }} />}
       </div>
-      
-      <div className="glass-card rounded-2xl p-4 font-mono text-[11px] min-h-[120px] max-h-[300px] overflow-y-auto scrollbar-hide">
-        <div className="space-y-2">
-          {logs.map((msg, i) => (
-            <div key={i} className="flex items-start gap-3 text-on-surface/80 animate-in fade-in slide-in-from-left-2 duration-300">
-              <span className="text-primary/50 select-none shrink-0 font-bold">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <span className="leading-relaxed">
-                {msg.startsWith("✅") ? <span className="text-secondary">{msg}</span> : 
-                 msg.startsWith("❌") ? <span className="text-red-400">{msg}</span> : 
-                 msg}
-              </span>
-            </div>
-          ))}
-          {running && (
-            <div className="flex items-center gap-3 text-secondary py-1">
-              <Loader2 size={12} className="animate-spin shrink-0" />
-              <span className="animate-pulse tracking-wide font-bold">Synchronizing...</span>
-            </div>
-          )}
-          <div ref={bottomRef} />
-        </div>
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 12, fontFamily: 'var(--font-mono)', fontSize: 11, minHeight: 100, maxHeight: 220, overflowY: 'auto' }}>
+        {logs.map((msg, i) => (
+          <div key={i} style={{ display: 'flex', gap: 10, animation: 'log-in 0.2s ease both', marginBottom: 4 }}>
+            <span style={{ color: 'var(--text-3)', minWidth: 22, userSelect: 'none', fontWeight: 500 }}>{String(i + 1).padStart(2, '0')}</span>
+            <span style={{ color: msg.startsWith('✅') ? 'var(--teal)' : msg.startsWith('❌') ? 'var(--red)' : 'var(--text-2)', lineHeight: 1.5 }}>{msg}</span>
+          </div>
+        ))}
+        {running && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--purple)', marginTop: 4 }}>
+            <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: 'var(--purple)', animation: 'blink-dot 0.8s infinite' }} />
+            <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.05em' }}>Synchronizing…</span>
+          </div>
+        )}
+        <div ref={bottomRef} />
       </div>
     </div>
   );

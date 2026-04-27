@@ -8,105 +8,105 @@ export default function KnowledgeSearch() {
   const [hits, setHits] = useState(null);
   const [error, setError] = useState(null);
   const [isRecent, setIsRecent] = useState(false);
+  const [expandedIdx, setExpandedIdx] = useState(null);
 
-  useEffect(() => {
-    fetchRecent();
-  }, []);
+  useEffect(() => { fetchRecent(); }, []);
 
   async function fetchRecent() {
-    setLoading(true);
-    setIsRecent(true);
-    try {
-      const data = await getRecentRAG(10);
-      setHits(data.hits);
-    } catch (err) {
-      setError("Failed to load recent research");
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true); setIsRecent(true);
+    try { const data = await getRecentRAG(10); setHits(data.hits); }
+    catch { setError("Failed to load recent research"); }
+    finally { setLoading(false); }
   }
 
   async function handleSearch(e) {
     if (e) e.preventDefault();
-    if (!query.trim()) {
-      fetchRecent();
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    setIsRecent(false);
-    try {
-      const data = await searchRAG(query.trim(), 8);
-      setHits(data.hits);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    if (!query.trim()) { fetchRecent(); return; }
+    setLoading(true); setError(null); setIsRecent(false);
+    try { const data = await searchRAG(query.trim(), 8); setHits(data.hits); }
+    catch (err) { setError(err.message); }
+    finally { setLoading(false); }
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div style={{ maxWidth: 680, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Header */}
       <div>
-        <h2 className="text-xl font-bold mb-1 flex items-center gap-2">
-          <Database size={18} className="text-indigo-400" />
-          Research Knowledge Base
-        </h2>
-        <p className="text-sm text-gray-400">Search past research stored in Qdrant vector memory.</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <Database size={16} style={{ color: 'var(--purple)' }} />
+          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 20, fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>Research Knowledge Base</h2>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>Search past research stored in Qdrant vector memory.</p>
       </div>
 
-      <form onSubmit={handleSearch} className="flex gap-2">
+      {/* Search input with icon */}
+      <form onSubmit={handleSearch} style={{ position: 'relative' }}>
+        <Search size={14} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-3)' }} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search past research topics…"
-          className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500"
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            paddingLeft: 38, paddingRight: 12, paddingTop: 10, paddingBottom: 10,
+            background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8,
+            fontSize: 13, fontFamily: 'var(--font-ui)', color: 'var(--text-1)', outline: 'none',
+            transition: 'border-color 0.2s',
+          }}
+          onFocus={e => e.target.style.borderColor = 'var(--purple)'}
+          onBlur={e => e.target.style.borderColor = 'var(--border)'}
         />
-        <button
-          type="submit"
-          disabled={loading || !query.trim()}
-          className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 text-white text-sm font-semibold rounded-xl transition"
-        >
-          {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-        </button>
+        {loading && <Loader2 size={14} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--purple)', animation: 'blink-dot 0.6s infinite' }} />}
       </form>
 
-      {error && <p className="text-red-400 text-sm">{error}</p>}
+      {error && <p style={{ color: 'var(--red)', fontSize: 12 }}>{error}</p>}
 
       {hits !== null && hits.length === 0 && (
-        <p className="text-gray-500 text-sm">No similar past research found. Run some research first to build the knowledge base.</p>
+        <p style={{ color: 'var(--text-3)', fontSize: 12 }}>No similar past research found. Run some research first.</p>
       )}
 
       {hits && hits.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-            {isRecent ? <Clock size={12} /> : <Search size={12} />}
-            {isRecent ? "Recent Research" : `${hits.length} result${hits.length !== 1 ? "s" : ""} found`}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <p style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {isRecent ? <><Clock size={10} /> Recent Research</> : <><Search size={10} /> {hits.length} result{hits.length !== 1 ? 's' : ''} found</>}
           </p>
-          {hits.map((h, i) => (
-            <div key={i} className="glass rounded-xl p-4 space-y-2 hover:bg-white/5 transition">
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="text-sm font-semibold">{h.topic}</h3>
-                <span className="shrink-0 text-xs bg-indigo-900/50 text-indigo-300 px-2 py-0.5 rounded-full">
-                  {Math.round(h.similarity_score * 100)}% match
-                </span>
+          {hits.map((h, i) => {
+            const pct = Math.round(h.similarity_score * 100);
+            const scoreColor = pct > 90 ? 'var(--teal)' : 'var(--purple)';
+            const isExpanded = expandedIdx === i;
+            return (
+              <div key={i} style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 16px', transition: 'border-color 0.2s', cursor: 'pointer' }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-hover)'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                  {/* Title */}
+                  <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: 16, fontWeight: 600, color: 'var(--text-1)', margin: 0, flex: 1 }}>{h.topic}</h3>
+                  {/* Score */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 600, color: scoreColor }}>{pct}%</span>
+                    <div style={{ width: 48, height: 4, background: 'var(--bg)', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: scoreColor, borderRadius: 2 }} />
+                    </div>
+                  </div>
+                </div>
+                {h.stored_at && <p style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', margin: '6px 0 0' }}>{h.stored_at.split("T")[0]}</p>}
+                {h.report_excerpt && (
+                  <p onClick={() => setExpandedIdx(isExpanded ? null : i)} style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 8, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: isExpanded ? 'unset' : 2, WebkitBoxOrient: 'vertical', overflow: isExpanded ? 'visible' : 'hidden', cursor: 'pointer' }}>{h.report_excerpt}</p>
+                )}
+                {h.key_findings?.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 8 }}>
+                    {h.key_findings.slice(0, 3).map((f, j) => (
+                      <div key={j} style={{ display: 'flex', gap: 6, fontSize: 11, color: 'var(--text-2)' }}>
+                        <span style={{ color: 'var(--teal)', flexShrink: 0 }}>·</span>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-gray-500">{h.stored_at?.split("T")[0]}</p>
-              {h.report_excerpt && (
-                <p className="text-xs text-gray-400 line-clamp-3">{h.report_excerpt}</p>
-              )}
-              {h.key_findings?.length > 0 && (
-                <ul className="space-y-0.5">
-                  {h.key_findings.slice(0, 2).map((f, j) => (
-                    <li key={j} className="text-xs text-gray-400 flex gap-1.5">
-                      <span className="text-indigo-500 shrink-0">•</span>
-                      <span className="line-clamp-1">{f}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

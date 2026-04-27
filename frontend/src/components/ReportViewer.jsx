@@ -1,13 +1,43 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
+import { Download, Volume2, ChevronDown, ExternalLink, Clock, ShieldCheck, Copy } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { 
-  Download, Volume2, ChevronDown, ChevronUp, BookOpen, 
-  BarChart2, GitBranch, Clock, Hash, ShieldCheck, 
-  Layers, ExternalLink, Share2, Printer
-} from "lucide-react";
 import { synthesizeSpeech } from "../lib/api";
 import MermaidDiagram from "./MermaidDiagram";
+
+/* ── Helpers ─────────────────────────────────────────── */
+
+function extractHeadings(text) {
+  return (text.match(/^##\s+.+/gm) || []).map(h => h.replace(/^##\s+/, ''));
+}
+
+/* ── Tab Bar ─────────────────────────────────────────── */
+
+const TABS = [
+  { id: "report", label: "Manuscript" },
+  { id: "debate", label: "Perspectives" },
+  { id: "trend", label: "Timeline" },
+  { id: "refs", label: "Sources" },
+  { id: "diagrams", label: "Visuals" },
+];
+
+function TabBar({ tab, setTab, counts }) {
+  return (
+    <div style={{ display: 'flex', gap: 2, background: 'var(--bg-surface)', padding: 3, borderRadius: 8, border: '1px solid var(--border)', marginBottom: 24 }}>
+      {TABS.map(t => {
+        const active = tab === t.id;
+        const label = t.id === 'refs' && counts.refs ? `${t.label} (${counts.refs})` : t.id === 'diagrams' && counts.diagrams ? `${t.label} (${counts.diagrams})` : t.label;
+        return (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{ padding: '6px 14px', borderRadius: 4, fontSize: 11, fontWeight: 500, fontFamily: 'var(--font-ui)', border: 'none', cursor: 'pointer', background: active ? 'var(--bg-overlay)' : 'transparent', color: active ? 'var(--text-1)' : 'var(--text-3)', transition: 'all 0.2s' }}>
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Main Component ──────────────────────────────────── */
 
 export default function ReportViewer({ result }) {
   const [tab, setTab] = useState("report");
@@ -20,338 +50,262 @@ export default function ReportViewer({ result }) {
   const debate = result?.debate_perspectives;
   const trend = result?.trend_timeline;
   const docxUrl = result?.download_url;
-
   const wordCount = report.split(/\s+/).length;
-  const confidence = 98; // Simulated or derived if available
+  const readTime = Math.max(1, Math.round(wordCount / 230));
+  const confidence = 98;
+  const headings = extractHeadings(report);
 
   async function handleSpeak() {
-    if (speaking) {
-      audioRef.current?.pause();
-      setSpeaking(false);
-      return;
-    }
+    if (speaking) { audioRef.current?.pause(); setSpeaking(false); return; }
     try {
       setSpeaking(true);
-      const excerpt = report.slice(0, 800);
-      const url = await synthesizeSpeech(excerpt);
+      const url = await synthesizeSpeech(report.slice(0, 800));
       const audio = new Audio(url);
       audioRef.current = audio;
       audio.onended = () => setSpeaking(false);
       audio.play();
-    } catch {
-      setSpeaking(false);
-    }
+    } catch { setSpeaking(false); }
   }
 
-  const TABS = [
-    { id: "report",  label: "Manuscript",   icon: BookOpen },
-    { id: "diagrams",label: `Visuals (${diagrams.length})`, icon: BarChart2 },
-    { id: "debate",  label: "Perspectives", icon: GitBranch },
-    { id: "trend",   label: "Timeline",     icon: Clock },
-    { id: "refs",    label: `Sources (${citations.length})`, icon: Hash },
-  ];
-
   return (
-    <div className="flex flex-col lg:flex-row gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {/* Sidebar: Table of Contents & Metrics */}
-      <aside className="lg:w-72 flex-shrink-0 space-y-6">
-        <div className="glass-panel rounded-2xl p-6 space-y-6 sticky top-6">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-secondary font-bold mb-4">Scientific Metrics</p>
-            <div className="space-y-4">
-              <MetricItem icon={ShieldCheck} label="Confidence" value={`${confidence}%`} color="text-secondary" />
-              <MetricItem icon={Layers} label="Sources" value={citations.length} color="text-primary" />
-              <MetricItem icon={Clock} label="Word Count" value={wordCount} color="text-on-surface-variant" />
-            </div>
-          </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+      <TabBar tab={tab} setTab={setTab} counts={{ refs: citations.length, diagrams: diagrams.length }} />
 
-          <div className="w-full h-px bg-white/5" />
-
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-secondary font-bold mb-4">Navigation</p>
-            <nav className="space-y-1">
-              {TABS.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => setTab(id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 ${
-                    tab === id 
-                      ? "bg-white/10 text-white shadow-inner translate-x-1" 
-                      : "text-on-surface-variant hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  <Icon size={16} className={tab === id ? "text-secondary" : "text-gray-500"} />
-                  {label}
+      {tab === "report" && (
+        <div style={{ display: 'flex', gap: 24 }}>
+          {/* TOC Sidebar */}
+          <div style={{ width: 200, flexShrink: 0, position: 'sticky', top: 24, alignSelf: 'flex-start' }}>
+            <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 10, fontWeight: 600 }}>Contents</div>
+            <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {headings.map((h, i) => (
+                <button key={i} onClick={() => document.getElementById(`section-${i}`)?.scrollIntoView({ behavior: 'smooth' })} style={{ textAlign: 'left', padding: '4px 8px', borderRadius: 4, fontSize: 11, fontFamily: 'var(--font-ui)', color: 'var(--text-2)', background: 'transparent', border: 'none', cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {h}
                 </button>
               ))}
             </nav>
-          </div>
-
-          <div className="w-full h-px bg-white/5" />
-
-          <div className="flex flex-col gap-2">
-            <button className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-white/5 text-xs font-semibold text-on-surface-variant hover:text-white hover:border-white/20 transition-all">
-              <Share2 size={14} /> Share Findings
-            </button>
-            <button className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-white/5 text-xs font-semibold text-on-surface-variant hover:text-white hover:border-white/20 transition-all">
-              <Printer size={14} /> Print Abstract
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <div className="flex-1 min-w-0">
-        {/* Editorial Header */}
-        <div className="mb-10 space-y-6">
-          <div className="flex items-start justify-between gap-4">
-            <h1 className="text-4xl md:text-5xl font-serif font-bold text-white leading-tight">
-              {result?.user_topic || "Research Manuscript"}
-            </h1>
-            <div className="flex gap-3">
-              <button
-                onClick={handleSpeak}
-                className={`p-3 rounded-full transition-all duration-300 ${
-                  speaking ? "bg-secondary text-bg-deep" : "glass-card text-secondary hover:scale-110"
-                }`}
-              >
-                <Volume2 size={20} />
-              </button>
-              {docxUrl && (
-                <a
-                  href={docxUrl}
-                  download
-                  className="p-3 glass-card rounded-full text-primary hover:scale-110 transition-all"
-                >
-                  <Download size={20} />
-                </a>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-6 text-xs text-on-surface-variant uppercase tracking-wider font-semibold">
-            <span className="flex items-center gap-2">
-              <Clock size={14} className="text-secondary" /> {new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
-            </span>
-            <span className="flex items-center gap-2">
-              <ShieldCheck size={14} className="text-secondary" /> Peer-Reviewed by MARS Agents
-            </span>
-          </div>
-          <div className="w-full h-px bg-gradient-to-r from-secondary/50 via-white/5 to-transparent" />
-        </div>
-
-        {/* Dynamic Content Rendering */}
-        <div className="space-y-12">
-          {tab === "report" && (
-            <div className="prose prose-invert prose-lg max-w-none 
-              prose-headings:font-serif prose-headings:font-bold prose-headings:text-white
-              prose-p:text-on-surface/90 prose-p:leading-relaxed
-              prose-strong:text-secondary prose-a:text-primary prose-a:no-underline hover:prose-a:underline
-              prose-li:text-on-surface/80">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{report}</ReactMarkdown>
-            </div>
-          )}
-
-          {tab === "diagrams" && (
-            <div className="grid grid-cols-1 gap-8">
-              {diagrams.length === 0 && (
-                <div className="glass-panel rounded-2xl p-12 text-center border-dashed border-2">
-                  <p className="text-on-surface-variant font-medium">No visual models were generated for this synthesis.</p>
-                </div>
-              )}
-              {diagrams.map((d, i) => (
-                <div key={i} className="glass-panel rounded-2xl p-8 space-y-6 overflow-hidden">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-secondary/20 flex items-center justify-center text-secondary">
-                      <Layers size={18} />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-lg text-white">{d.title}</h3>
-                      <p className="text-xs text-on-surface-variant">{d.description}</p>
-                    </div>
-                  </div>
-                  <div className="bg-white/5 rounded-xl p-6 overflow-x-auto">
-                    <MermaidDiagram code={d.mermaid_code} />
-                  </div>
+            {/* Metric tiles */}
+            <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {[
+                { label: 'Confidence', val: `${confidence}%`, c: 'var(--teal)' },
+                { label: 'Word Count', val: wordCount, c: 'var(--purple)' },
+                { label: 'Read Time', val: `${readTime} min`, c: 'var(--text-2)' },
+              ].map(m => (
+                <div key={m.label} style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 10px' }}>
+                  <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{m.label}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-serif)', color: m.c, marginTop: 2 }}>{m.val}</div>
                 </div>
               ))}
             </div>
-          )}
-
-          {tab === "debate" && (
-            <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
-              <div className="glass-panel rounded-2xl p-8 space-y-4">
-                <div className="flex items-center gap-2 text-secondary uppercase tracking-tighter font-bold text-[10px]">
-                  <GitBranch size={12} /> Dialectical Analysis
-                </div>
-                <h3 className="text-2xl font-serif font-bold text-white">Central Paradox</h3>
-                <p className="text-on-surface leading-relaxed text-lg">{debate?.core_debate}</p>
-                
-                <div className="pt-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Controversy Index</span>
-                    <span className="text-sm font-bold text-secondary">{Math.round((debate?.controversy_score || 0) * 100)}%</span>
-                  </div>
-                  <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-1000" 
-                      style={{ width: `${(debate?.controversy_score || 0) * 100}%` }} 
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <ArgumentPanel title="Theses (Pro)" items={debate?.pro_arguments} theme="secondary" />
-                <ArgumentPanel title="Antitheses (Con)" items={debate?.con_arguments} theme="primary" />
-              </div>
-
-              {debate?.verdict && (
-                <div className="glass-panel rounded-2xl p-8 bg-gradient-to-br from-white/[0.02] to-transparent">
-                  <h3 className="text-xs font-bold text-secondary uppercase tracking-widest mb-4">Synthesis Verdict</h3>
-                  <p className="text-on-surface italic font-medium leading-relaxed">{debate.verdict}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {tab === "trend" && <TrendAnalysis data={trend} />}
-
-          {tab === "refs" && <SourceIndex citations={citations} />}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MetricItem({ icon: Icon, label, value, color }) {
-  return (
-    <div className="flex items-center justify-between group">
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-lg bg-white/5 group-hover:bg-white/10 transition-colors">
-          <Icon size={14} className="text-on-surface-variant" />
-        </div>
-        <span className="text-xs font-semibold text-on-surface-variant">{label}</span>
-      </div>
-      <span className={`text-sm font-bold ${color}`}>{value}</span>
-    </div>
-  );
-}
-
-function ArgumentPanel({ title, items = [], theme }) {
-  const accentColor = theme === "secondary" ? "text-secondary" : "text-primary";
-  const bgColor = theme === "secondary" ? "bg-secondary/10" : "bg-primary/10";
-
-  return (
-    <div className="glass-panel rounded-2xl p-6 space-y-6">
-      <h3 className={`text-sm font-bold uppercase tracking-widest ${accentColor}`}>{title}</h3>
-      <div className="space-y-6">
-        {items.map((a, i) => (
-          <div key={i} className="space-y-2 group">
-            <div className="flex items-start gap-3">
-              <span className={`text-[10px] font-bold ${bgColor} ${accentColor} px-1.5 rounded mt-1`}>{i + 1}</span>
-              <div>
-                <p className="text-sm font-bold text-white group-hover:text-secondary transition-colors">{a.claim}</p>
-                <p className="text-xs text-on-surface-variant leading-relaxed mt-1">{a.evidence}</p>
-              </div>
-            </div>
           </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
-function TrendAnalysis({ data }) {
-  if (!data) return null;
-  return (
-    <div className="space-y-8 animate-in fade-in duration-700">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="glass-panel rounded-2xl p-6 border-l-4 border-secondary">
-          <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-2">Momentum</p>
-          <p className="text-2xl font-serif font-bold text-white capitalize">{data.momentum}</p>
-        </div>
-        <div className="glass-panel rounded-2xl p-6 border-l-4 border-primary">
-          <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-2">Maturity Stage</p>
-          <p className="text-2xl font-serif font-bold text-white capitalize">{data.maturity_stage}</p>
-        </div>
-        <div className="glass-panel rounded-2xl p-6 border-l-4 border-on-surface-variant">
-          <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-2">Market Interest</p>
-          <p className="text-2xl font-serif font-bold text-white">{Math.round((data.interest_score || 0) * 100)}%</p>
-        </div>
-      </div>
-
-      <div className="glass-panel rounded-2xl p-8 space-y-8 relative overflow-hidden">
-        <div className="absolute top-0 left-12 w-px h-full bg-white/5" />
-        {(data.timeline || []).map((t, i) => (
-          <div key={i} className="relative flex gap-12 items-start group">
-            <div className="w-24 shrink-0 text-right">
-              <span className="text-xs font-bold text-secondary group-hover:text-white transition-colors uppercase tracking-widest">{t.period}</span>
+          {/* Article */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Badge row */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+              {['AI-Generated', 'Peer-Reviewed', 'Multi-Agent'].map(b => (
+                <span key={b} style={{ padding: '3px 10px', borderRadius: 20, fontSize: 9, fontFamily: 'var(--font-mono)', fontWeight: 600, background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{b}</span>
+              ))}
             </div>
-            <div className="absolute left-[3.15rem] top-1.5 w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_#4fdbc8]" />
-            <div className="flex-1 pb-8 group-last:pb-0">
-              <h4 className="text-lg font-bold text-white mb-1 group-hover:text-secondary transition-all">{t.label}</h4>
-              <p className="text-sm text-on-surface-variant leading-relaxed">{t.description}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SourceIndex({ citations }) {
-  const [expanded, setExpanded] = useState(null);
-  return (
-    <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500">
-      {citations.map((c, i) => (
-        <div key={i} className="glass-panel rounded-2xl overflow-hidden group transition-all duration-300">
-          <button
-            onClick={() => setExpanded(expanded === i ? null : i)}
-            className="w-full flex items-center justify-between p-6 text-left hover:bg-white/[0.02]"
-          >
-            <div className="flex items-center gap-6">
-              <span className="text-xs font-bold text-primary bg-primary/10 w-8 h-8 rounded-lg flex items-center justify-center shrink-0">
-                {i + 1}
-              </span>
-              <div>
-                <h4 className="text-sm font-bold text-white group-hover:text-primary transition-colors">{c.title}</h4>
-                <p className="text-xs text-on-surface-variant mt-1">
-                  {c.year} • <span className="text-secondary">{c.source_type}</span>
-                </p>
-              </div>
-            </div>
-            <div className={`p-2 rounded-full transition-transform duration-300 ${expanded === i ? "rotate-180 bg-white/5" : ""}`}>
-              <ChevronDown size={18} className="text-on-surface-variant" />
-            </div>
-          </button>
-          
-          {expanded === i && (
-            <div className="px-6 pb-6 pt-2 space-y-6 border-t border-white/5 bg-white/[0.01]">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Standard Reference (IEEE)</p>
-                    <p className="text-xs text-on-surface italic leading-relaxed">{c.ieee_format}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">APA Format</p>
-                    <p className="text-xs text-on-surface italic leading-relaxed">{c.apa_format}</p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">BibTeX Source</p>
-                  <pre className="bg-[#060e20] p-4 rounded-xl text-[10px] font-mono text-primary overflow-x-auto border border-white/5">
-                    {c.bibtex}
-                  </pre>
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <button className="flex items-center gap-2 text-[10px] font-bold text-secondary uppercase tracking-widest hover:text-white transition-colors">
-                  View Full Source <ExternalLink size={12} />
+            {/* Title */}
+            <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: 34, fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.15, margin: 0 }}>
+              {result?.user_topic || "Research Manuscript"}
+            </h1>
+            {/* Meta row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 12, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>
+              <span>{new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+              <span>·</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><ShieldCheck size={11} /> Peer-reviewed</span>
+              <span>·</span>
+              <span>{citations.length} citations</span>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                <button onClick={handleSpeak} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: speaking ? 'var(--purple)' : 'transparent', color: speaking ? '#fff' : 'var(--text-3)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontFamily: 'var(--font-mono)' }}>
+                  <Volume2 size={12} />{speaking ? 'Stop' : 'Listen'}
                 </button>
+                {docxUrl && (
+                  <a href={docxUrl} download style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', color: 'var(--text-3)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontFamily: 'var(--font-mono)' }}>
+                    <Download size={12} />DOCX
+                  </a>
+                )}
+              </div>
+            </div>
+            {/* Divider */}
+            <div style={{ width: '100%', height: 1, background: 'var(--border)', margin: '20px 0 24px' }} />
+            {/* Body — ReactMarkdown for full GFM support (tables, etc.) */}
+            <div className="mars-prose">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{report}</ReactMarkdown>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === "debate" && <DebateTab debate={debate} />}
+      {tab === "trend" && <TrendTab data={trend} />}
+      {tab === "refs" && <SourcesTab citations={citations} />}
+      {tab === "diagrams" && <VisualsTab diagrams={diagrams} />}
+    </div>
+  );
+}
+
+/* ── Perspectives Tab ────────────────────────────────── */
+
+function DebateTab({ debate }) {
+  if (!debate) return <div style={{ color: 'var(--text-3)', fontSize: 13 }}>No debate data available.</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Core debate card */}
+      <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, padding: 24 }}>
+        <p style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 18, color: 'var(--text-1)', lineHeight: 1.6, margin: 0 }}>{debate.core_debate}</p>
+        <div style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
+            <span>Controversy Index</span>
+            <span style={{ color: 'var(--purple)' }}>{Math.round((debate.controversy_score || 0) * 100)}%</span>
+          </div>
+          <div style={{ height: 4, background: 'var(--bg)', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${(debate.controversy_score || 0) * 100}%`, background: 'linear-gradient(90deg, var(--purple), var(--teal))', borderRadius: 2, transition: 'width 1s ease' }} />
+          </div>
+        </div>
+      </div>
+      {/* Pro / Con grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <ArgPanel title="Theses (Pro)" items={debate.pro_arguments} color="var(--teal)" />
+        <ArgPanel title="Antitheses (Con)" items={debate.con_arguments} color="var(--purple)" />
+      </div>
+      {/* Verdict */}
+      {debate.verdict && (
+        <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderLeft: '3px solid var(--teal)', borderRadius: 8, padding: 20 }}>
+          <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--teal)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8, fontWeight: 600 }}>Synthesis Verdict</div>
+          <p style={{ fontSize: 14, color: 'var(--text-2)', fontStyle: 'italic', lineHeight: 1.7, margin: 0 }}>{debate.verdict}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArgPanel({ title, items = [], color }) {
+  return (
+    <div style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, padding: 20 }}>
+      <h3 style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 14, fontWeight: 600 }}>{title}</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {items.map((a, i) => (
+          <div key={i}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>{a.claim}</p>
+            <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4, lineHeight: 1.5 }}>{a.evidence}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Timeline Tab ────────────────────────────────────── */
+
+function TrendTab({ data }) {
+  if (!data) return null;
+  const tiles = [
+    { label: 'Momentum', val: data.momentum, border: 'var(--teal)' },
+    { label: 'Maturity', val: data.maturity_stage, border: 'var(--purple)' },
+    { label: 'Market Index', val: `${Math.round((data.interest_score || 0) * 100)}%`, border: 'var(--text-3)' },
+  ];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+        {tiles.map(t => (
+          <div key={t.label} style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderLeft: `3px solid ${t.border}`, borderRadius: 8, padding: '14px 16px' }}>
+            <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>{t.label}</div>
+            <div style={{ fontSize: 20, fontFamily: 'var(--font-serif)', fontWeight: 700, color: 'var(--text-1)', textTransform: 'capitalize' }}>{t.val}</div>
+          </div>
+        ))}
+      </div>
+      {/* Vertical timeline */}
+      <div style={{ position: 'relative', paddingLeft: 100 }}>
+        <div style={{ position: 'absolute', left: 90, top: 0, bottom: 0, width: 1, background: 'var(--border)' }} />
+        {(data.timeline || []).map((t, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 24, position: 'relative' }}>
+            <div style={{ position: 'absolute', left: -100, width: 80, textAlign: 'right', fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--teal)', paddingTop: 2 }}>{t.period}</div>
+            <div style={{ position: 'absolute', left: -14, top: 6, width: 8, height: 8, borderRadius: '50%', background: 'var(--teal)', boxShadow: '0 0 6px var(--teal)' }} />
+            <div style={{ paddingLeft: 16 }}>
+              <h4 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>{t.label}</h4>
+              <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4, lineHeight: 1.5 }}>{t.description}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Sources Tab ─────────────────────────────────────── */
+
+function SourcesTab({ citations }) {
+  const [expanded, setExpanded] = useState(null);
+  const [copied, setCopied] = useState(null);
+
+  function copyBib(text, i) {
+    navigator.clipboard.writeText(text);
+    setCopied(i);
+    setTimeout(() => setCopied(null), 1500);
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {citations.map((c, i) => (
+        <div key={i} style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+          <button onClick={() => setExpanded(expanded === i ? null : i)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--purple)', background: 'rgba(139,124,246,0.1)', width: 24, height: 24, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
+              <div>
+                <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>{c.title}</h4>
+                <p style={{ fontSize: 10, color: 'var(--text-3)', margin: '2px 0 0' }}>{c.year} · <span style={{ color: 'var(--teal)' }}>{c.source_type}</span></p>
+              </div>
+            </div>
+            <ChevronDown size={14} style={{ color: 'var(--text-3)', transform: expanded === i ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+          </button>
+          {expanded === i && (
+            <div style={{ padding: '0 16px 16px', borderTop: '1px solid var(--border)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 12 }}>
+                <div>
+                  <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>IEEE Format</div>
+                  <p style={{ fontSize: 11, color: 'var(--text-2)', fontStyle: 'italic', lineHeight: 1.5, margin: 0 }}>{c.ieee_format}</p>
+                </div>
+                <div>
+                  <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>APA Format</div>
+                  <p style={{ fontSize: 11, color: 'var(--text-2)', fontStyle: 'italic', lineHeight: 1.5, margin: 0 }}>{c.apa_format}</p>
+                </div>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>BibTeX</div>
+                  <button onClick={() => copyBib(c.bibtex, i)} style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: copied === i ? 'var(--teal)' : 'var(--text-3)', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Copy size={10} />{copied === i ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+                <pre style={{ background: 'var(--bg)', padding: 12, borderRadius: 6, fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--purple)', overflowX: 'auto', border: '1px solid var(--border)', margin: 0 }}>{c.bibtex}</pre>
               </div>
             </div>
           )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Visuals Tab ─────────────────────────────────────── */
+
+function VisualsTab({ diagrams }) {
+  if (!diagrams.length) return <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: 40 }}>No visual models were generated.</div>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {diagrams.map((d, i) => (
+        <div key={i} style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, padding: 20 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', margin: '0 0 4px' }}>{d.title}</h3>
+          <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '0 0 16px' }}>{d.description}</p>
+          <div style={{ background: 'var(--bg)', borderRadius: 6, padding: 16, overflowX: 'auto', border: '1px solid var(--border)' }}>
+            <MermaidDiagram code={d.mermaid_code} />
+          </div>
+          <details style={{ marginTop: 8 }}>
+            <summary style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', cursor: 'pointer' }}>View source</summary>
+            <pre style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-2)', marginTop: 8, padding: 12, background: 'var(--bg)', borderRadius: 6, overflowX: 'auto', border: '1px solid var(--border)' }}>{d.mermaid_code}</pre>
+          </details>
         </div>
       ))}
     </div>

@@ -13,11 +13,7 @@ export default function ResearchForm({ onSubmit, running }) {
   }
 
   async function toggleRecord() {
-    if (recording) {
-      mediaRec?.stop();
-      setRecording(false);
-      return;
-    }
+    if (recording) { mediaRec?.stop(); setRecording(false); return; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const chunks = [];
@@ -34,72 +30,73 @@ export default function ResearchForm({ onSubmit, running }) {
           },
         });
       };
-      rec.start();
-      setMediaRec(rec);
-      setRecording(true);
-    } catch {
-      alert("Microphone access denied.");
-    }
+      rec.start(); setMediaRec(rec); setRecording(true);
+    } catch { alert("Microphone access denied."); }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="flex items-center gap-2 mb-1">
-        <Sparkles size={14} className="text-secondary" />
-        <h2 className="text-[10px] font-bold text-on-surface-variant uppercase tracking-[0.2em]">Research Directive</h2>
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Sparkles size={12} style={{ color: 'var(--purple)' }} />
+        <h2 style={{ fontSize: 9, fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.15em', margin: 0 }}>Research Directive</h2>
       </div>
-      
-      <div className="relative group">
+
+      <div style={{ position: 'relative' }}>
         <textarea
           value={topic}
           onChange={(e) => setTopic(e.target.value)}
           placeholder="Initiate a deep-dive research mission..."
           rows={3}
           disabled={running}
-          className="stealth-input w-full rounded-2xl px-5 py-4 pr-12 text-sm text-white placeholder-on-surface-variant/30 resize-none transition-all duration-500 group-hover:bg-[#060e20]/80 disabled:opacity-50 font-medium"
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            padding: '12px 40px 12px 14px',
+            background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8,
+            fontSize: 13, fontFamily: 'var(--font-ui)', color: 'var(--text-1)',
+            resize: 'none', outline: 'none', transition: 'border-color 0.2s',
+            opacity: running ? 0.5 : 1,
+          }}
+          onFocus={e => e.target.style.borderColor = 'var(--purple)'}
+          onBlur={e => e.target.style.borderColor = 'var(--border)'}
         />
-        <button
-          type="button"
-          onClick={toggleRecord}
-          title={recording ? "Stop recording" : "Record with Sarvam AI"}
-          className={`absolute right-4 top-4 p-2 rounded-xl transition-all duration-300 ${
-            recording
-              ? "text-white bg-red-500/80 shadow-[0_0_15px_rgba(239,68,68,0.5)] animate-pulse"
-              : "text-on-surface-variant hover:text-secondary hover:bg-secondary/10"
-          }`}
-        >
-          {recording ? <MicOff size={16} /> : <Mic size={16} />}
+        <button type="button" onClick={toggleRecord} title={recording ? "Stop recording" : "Record with Sarvam AI"}
+          style={{
+            position: 'absolute', right: 10, top: 10, padding: 6, borderRadius: 6, border: 'none', cursor: 'pointer',
+            background: recording ? 'rgba(224,92,124,0.2)' : 'transparent',
+            color: recording ? 'var(--red)' : 'var(--text-3)',
+            transition: 'all 0.2s',
+          }}>
+          {recording ? <MicOff size={14} /> : <Mic size={14} />}
         </button>
       </div>
 
-      <button
-        type="submit"
-        disabled={running || !topic.trim()}
-        className={`w-full flex items-center justify-center gap-3 px-6 py-3.5 text-sm font-bold rounded-2xl transition-all duration-500 shadow-xl ${
-          running 
-            ? "bg-white/5 text-on-surface-variant border border-white/5 cursor-not-allowed" 
-            : "premium-gradient text-white hover:scale-[1.02] active:scale-95 hover:shadow-secondary/20"
-        }`}
-      >
+      <button type="submit" disabled={running || !topic.trim()}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          padding: '10px 16px', borderRadius: 8, border: 'none', cursor: running ? 'not-allowed' : 'pointer',
+          fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-ui)',
+          background: running ? 'var(--bg-overlay)' : 'var(--purple)',
+          color: running ? 'var(--text-3)' : '#fff',
+          opacity: (!topic.trim() && !running) ? 0.4 : 1,
+          transition: 'all 0.2s',
+        }}>
         {running ? (
           <>
-            <Loader2 size={16} className="animate-spin text-secondary" />
-            <span className="animate-pulse">Synthesizing Intelligence...</span>
+            <Loader2 size={14} style={{ animation: 'blink-dot 0.6s infinite' }} />
+            <span>Synthesizing Intelligence…</span>
           </>
         ) : (
           <>
-            <Search size={16} />
+            <Search size={14} />
             Engage Neural Agents
           </>
         )}
       </button>
 
       {recording && (
-        <div className="flex items-center justify-center gap-2 py-1">
-          <div className="w-1 h-1 rounded-full bg-red-500 animate-ping" />
-          <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">
-            Aural Uplink Active
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--red)', animation: 'blink-dot 0.6s infinite' }} />
+          <p style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--red)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', margin: 0 }}>Aural Uplink Active</p>
         </div>
       )}
     </form>
