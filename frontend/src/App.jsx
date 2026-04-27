@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { History, X, Search, GitBranch, Database, Archive } from "lucide-react";
+import { useState, useEffect } from "react";
+import { History, X, Search, GitBranch, Database, Archive, Sun, Moon } from "lucide-react";
 import AgentGraph from "./components/AgentGraph";
 import ResearchForm from "./components/ResearchForm";
 import ProgressFeed from "./components/ProgressFeed";
@@ -24,6 +24,16 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [theme, setTheme] = useState(() => localStorage.getItem('mars-theme') || 'dark');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('mars-theme', theme);
+  }, [theme]);
+
+  function toggleTheme() {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  }
 
   const NODE_ORDER = ["planner", "researcher", "rag_store", "enrichment", "writer", "critic"];
 
@@ -208,6 +218,29 @@ export default function App() {
             Archive
           </button>
 
+          {/* Theme toggle */}
+          <button
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              background: 'var(--bg-raised)',
+              border: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'var(--text-2)',
+              transition: 'all 0.3s ease',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--purple)'; e.currentTarget.style.color = 'var(--purple)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-2)'; }}
+          >
+            {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
+          </button>
+
           {/* Avatar */}
           <div style={{
             width: 28,
@@ -222,6 +255,7 @@ export default function App() {
             fontFamily: 'var(--font-mono)',
             color: 'var(--text-3)',
             fontWeight: 600,
+            transition: 'all 0.3s ease',
           }}>Y</div>
         </div>
       </header>

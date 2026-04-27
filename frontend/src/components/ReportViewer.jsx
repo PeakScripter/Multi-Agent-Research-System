@@ -252,7 +252,7 @@ function SourcesTab({ citations }) {
         <div key={i} style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
           <button onClick={() => setExpanded(expanded === i ? null : i)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--purple)', background: 'rgba(139,124,246,0.1)', width: 24, height: 24, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
+              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--purple)', background: 'var(--purple-bg)', width: 24, height: 24, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
               <div>
                 <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', margin: 0 }}>{c.title}</h4>
                 <p style={{ fontSize: 10, color: 'var(--text-3)', margin: '2px 0 0' }}>{c.year} · <span style={{ color: 'var(--teal)' }}>{c.source_type}</span></p>

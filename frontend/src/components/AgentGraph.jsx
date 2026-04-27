@@ -30,7 +30,7 @@ function ConnectorLine({ state }) {
       height: 1,
       alignSelf: 'center',
       background: state === 'done'
-        ? 'rgba(46,196,176,0.4)'
+        ? 'var(--teal)'
         : 'var(--border)',
       overflow: 'hidden',
     }}>
@@ -57,12 +57,12 @@ function AgentNode({ agent, state }) {
       symbolColor: 'var(--text-3)',
     },
     active: {
-      background: 'rgba(139,124,246,0.1)',
+      background: 'var(--purple-bg)',
       border: '1.5px solid var(--purple)',
       symbolColor: 'var(--purple)',
     },
     done: {
-      background: 'rgba(46,196,176,0.1)',
+      background: 'var(--teal-bg)',
       border: '1.5px solid var(--teal)',
       symbolColor: 'var(--teal)',
     },
@@ -158,7 +158,7 @@ export default function AgentGraph({ activeNode, completedNodes = [] }) {
       <div style={{
         position: 'absolute',
         inset: 0,
-        backgroundImage: 'radial-gradient(circle, var(--text-3) 0.5px, transparent 0.5px)',
+        backgroundImage: 'radial-gradient(circle, var(--dot-color) 0.5px, transparent 0.5px)',
         backgroundSize: '24px 24px',
         opacity: 0.15,
         pointerEvents: 'none',
@@ -200,7 +200,7 @@ export default function AgentGraph({ activeNode, completedNodes = [] }) {
             padding: '5px 12px',
             borderRadius: 20,
             background: 'var(--bg-raised)',
-            border: `1px solid ${subActive ? 'rgba(46,196,176,0.3)' : 'var(--border)'}`,
+            border: `1px solid ${subActive ? 'var(--teal)' : 'var(--border)'}`,
             fontSize: 10,
             fontFamily: 'var(--font-ui)',
             fontWeight: 500,

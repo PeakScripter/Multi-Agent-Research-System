@@ -17,9 +17,33 @@
   --purple:       #8b7cf6;
   --teal:         #2ec4b0;
   --red:          #e05c7c;
+  --purple-bg:    rgba(139,124,246,0.1);
+  --teal-bg:      rgba(46,196,176,0.1);
+  --purple-glow:  rgba(139,124,246,0.06);
+  --dot-color:    var(--text-3);
   --font-serif:   'Playfair Display', Georgia, serif;
   --font-ui:      'Space Grotesk', system-ui, sans-serif;
   --font-mono:    'JetBrains Mono', monospace;
+}
+
+/* ── Light Mode ──────────────────────────────────────── */
+[data-theme="light"] {
+  --bg:           #f5f5f8;
+  --bg-surface:   #ffffff;
+  --bg-raised:    #f0f0f5;
+  --bg-overlay:   #e8e8f0;
+  --border:       rgba(0,0,0,0.08);
+  --border-hover: rgba(0,0,0,0.15);
+  --text-1:       #1a1a2e;
+  --text-2:       #555570;
+  --text-3:       #9494ad;
+  --purple:       #6c5ce7;
+  --teal:         #1a9e8c;
+  --red:          #c0465a;
+  --purple-bg:    rgba(108,92,231,0.08);
+  --teal-bg:      rgba(26,158,140,0.08);
+  --purple-glow:  rgba(108,92,231,0.05);
+  --dot-color:    rgba(0,0,0,0.12);
 }
 
 @layer base {
@@ -29,6 +53,7 @@
     color: var(--text-1);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    transition: background 0.3s ease, color 0.3s ease;
   }
 
   h1, h2, h3, h4 {
@@ -161,7 +186,7 @@
 .mars-prose a {
   color: var(--purple);
   text-decoration: none;
-  border-bottom: 1px solid rgba(139,124,246,0.3);
+  border-bottom: 1px solid var(--purple-glow);
   transition: border-color 0.2s;
 }
 
@@ -173,7 +198,7 @@
   margin: 12px 0;
   padding: 10px 16px;
   border-left: 3px solid var(--purple);
-  background: rgba(139,124,246,0.06);
+  background: var(--purple-glow);
   border-radius: 0 6px 6px 0;
   color: var(--text-2);
   font-style: italic;
@@ -248,7 +273,7 @@
 }
 
 .mars-prose tbody tr:hover td {
-  background: rgba(139,124,246,0.04);
+  background: var(--purple-glow);
 }
 
 .mars-prose tbody tr:last-child td {
@@ -299,7 +324,7 @@
   border: 1px solid var(--border);
 }
 
-/* Mermaid diagram dark theme override */
+/* Mermaid diagram theme-aware overrides */
 .mermaid svg {
   background: transparent !important;
 }
@@ -307,4 +332,39 @@
 .mermaid text {
   fill: var(--text-1) !important;
   font-family: var(--font-ui) !important;
+}
+
+.mermaid .node rect,
+.mermaid .node circle,
+.mermaid .node polygon {
+  fill: var(--bg-raised) !important;
+  stroke: var(--border-hover) !important;
+}
+
+.mermaid .edgePath .path {
+  stroke: var(--text-3) !important;
+}
+
+.mermaid .edgeLabel {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-2) !important;
+}
+
+.mermaid .label {
+  color: var(--text-1) !important;
+}
+
+.mermaid .cluster rect {
+  fill: var(--bg-overlay) !important;
+  stroke: var(--border) !important;
+}
+
+/* Timeline diagram overrides */
+.mermaid .timeline-section rect {
+  fill: var(--bg-raised) !important;
+  stroke: var(--border-hover) !important;
+}
+
+.mermaid .timeline-section text {
+  fill: var(--text-1) !important;
 }

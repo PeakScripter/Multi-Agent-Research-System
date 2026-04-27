@@ -58,7 +58,7 @@ const HistorySidebar = ({ onSelectReport, isOpen, onClose }) => {
               <div style={{ width: 20, height: 20, border: '2px solid var(--border)', borderTopColor: 'var(--purple)', borderRadius: '50%', animation: 'blink-dot 0.6s infinite' }} />
             </div>
           ) : history.length === 0 ? (
-            <div style={{ textAlign: 'center', paddingTop: 40, color: 'var(--text-3)', fontSize: 12, fontStyle: 'italic' }}>No research history yet.</div>
+            <div style={{ textAlign: 'center', paddingTop: 40, color: 'var(--text-3)', fontSize: 12, fontStyle: 'italic' }}>This feature requires sign in. Since this is a demo its disabled. Contact owner for more info</div>
           ) : (
             history.map((item) => (
               <div key={item.id} onClick={() => loadItem(item.id)}
