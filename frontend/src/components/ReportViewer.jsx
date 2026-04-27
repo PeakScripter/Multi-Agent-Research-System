@@ -121,10 +121,18 @@ export default function ReportViewer({ result }) {
                 <button onClick={handleSpeak} style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: speaking ? 'var(--purple)' : 'transparent', color: speaking ? '#fff' : 'var(--text-3)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontFamily: 'var(--font-mono)' }}>
                   <Volume2 size={12} />{speaking ? 'Stop' : 'Listen'}
                 </button>
-                {docxUrl && (
-                  <a href={docxUrl} download style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', color: 'var(--text-3)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontFamily: 'var(--font-mono)' }}>
+                {result?.docx && (
+                  <button 
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${result.docx.base64}`;
+                      link.download = result.docx.filename || 'research_report.docx';
+                      link.click();
+                    }}
+                    style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontFamily: 'var(--font-mono)' }}
+                  >
                     <Download size={12} />DOCX
-                  </a>
+                  </button>
                 )}
               </div>
             </div>

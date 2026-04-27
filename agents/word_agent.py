@@ -24,17 +24,21 @@ class WordAgent:
         self.name = "Word Agent"
         self.output_dir = "outputs"
         
-        # Ensure output directory exists
-        if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir)
+        # Ensure output directory exists (safe for Vercel)
+        try:
+            if not os.path.exists(self.output_dir):
+                os.makedirs(self.output_dir)
+        except Exception:
+            pass
             
         logger.info(f"Initialized {self.name}")
     
-    def convert_to_word(self, state) -> Dict[str, Any]:
+    def convert_to_word(self, state, save_to_disk: bool = True) -> Dict[str, Any]:
         """
         Convert the final report to a Word document.
         Args:
             state: Current agent state (object or dict)
+            save_to_disk: Whether to save the file to the outputs folder
         """
         logger.info(f"{self.name} converting report to Word document")
         
@@ -51,6 +55,7 @@ class WordAgent:
             return {}
             
         try:
+            from io import BytesIO
             doc = Document()
             doc.add_heading(topic, 0)
             
@@ -74,13 +79,19 @@ class WordAgent:
             # Sanitize filename
             safe_topic = "".join([c for c in topic if c.isalpha() or c.isdigit() or c in (' ', '-', '_')]).rstrip()
             filename = f"{safe_topic.replace(' ', '_')}_report.docx"
-            filepath = os.path.join(self.output_dir, filename)
             
-            doc.save(filepath)
-            logger.info(f"Report saved to {filepath}")
-            
-            return {"word_document_path": filepath, "filename": filename}
+            if save_to_disk:
+                filepath = os.path.join(self.output_dir, filename)
+                doc.save(filepath)
+                logger.info(f"Report saved to {filepath}")
+                return {"word_document_path": filepath, "filename": filename}
+            else:
+                # Return memory stream
+                buffer = BytesIO()
+                doc.save(buffer)
+                buffer.seek(0)
+                return {"buffer": buffer, "filename": filename}
             
         except Exception as e:
             logger.error(f"{self.name} failed to convert report: {e}")
-            return {}
+            return {}

@@ -1,9 +1,32 @@
 {
   "version": 2,
+  "name": "mars-research-system",
   "builds": [
-    { "src": "api.py", "use": "@vercel/python" }
+    {
+      "src": "api.py",
+      "use": "@vercel/python",
+      "config": { "maxDuration": 300 }
+    },
+    {
+      "src": "frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist" }
+    }
   ],
   "routes": [
-    { "src": "/(.*)", "dest": "api.py" }
+    { "src": "/research", "dest": "api.py" },
+    { "src": "/chat", "dest": "api.py" },
+    { "src": "/voice", "dest": "api.py" },
+    { "src": "/tts", "dest": "api.py" },
+    { "src": "/compare", "dest": "api.py" },
+    { "src": "/rag/search", "dest": "api.py" },
+    { "src": "/rag/recent", "dest": "api.py" },
+    { "src": "/history(.*)", "dest": "api.py" },
+    { "src": "/status", "dest": "api.py" },
+    { "src": "/documents", "dest": "api.py" },
+    { "src": "/api/(.*)", "dest": "api.py" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/frontend/$1", "check": true },
+    { "src": "/(.*)", "dest": "/frontend/index.html" }
   ]
 }

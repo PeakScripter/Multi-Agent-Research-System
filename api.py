@@ -24,7 +24,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse, Response
 from pydantic import BaseModel
-from database import save_to_history, get_all_history, get_history_by_id, delete_history
+# from database import save_to_history, get_all_history, get_history_by_id, delete_history
 
 app = FastAPI(title="MARS Research Assistant API", version="2.0.0")
 
@@ -37,7 +37,10 @@ app.add_middleware(
 )
 
 OUTPUTS_DIR = "outputs"
-os.makedirs(OUTPUTS_DIR, exist_ok=True)
+try:
+    os.makedirs(OUTPUTS_DIR, exist_ok=True)
+except Exception:
+    pass
 
 SESSIONS: Dict[str, List[Dict[str, str]]] = {}
 
@@ -111,17 +114,22 @@ def _detect_research_intent(message: str) -> bool:
         return False
 
 
-def _make_word_doc(result: dict) -> Optional[str]:
+def _make_word_doc_base64(result: dict) -> Optional[Dict[str, str]]:
     try:
         from agents import WordAgent
+        import base64
         wa = WordAgent()
         proxy = SimpleNamespace(
             final_report=result.get("final_report"),
             draft_report=result.get("draft_report"),
             user_topic=result.get("user_topic", "Research Report"),
         )
-        out = wa.convert_to_word(proxy)
-        return out.get("filename")
+        # Use save_to_disk=False to get memory buffer
+        out = wa.convert_to_word(proxy, save_to_disk=False)
+        if "buffer" in out:
+            b64 = base64.b64encode(out["buffer"].read()).decode("utf-8")
+            return {"filename": out["filename"], "base64": b64}
+        return None
     except Exception as e:
         print(f"WordAgent error: {e}")
         return None
@@ -144,18 +152,14 @@ async def research(req: ResearchRequest):
         return StreamingResponse(_stream_workflow_gen(wf, req.topic, req.generate_docx), media_type="text/event-stream")
 
     result = wf.run(req.topic)
+    resp_data = {"session_id": session_id, "result": _serialisable(result)}
+
     if req.generate_docx:
-        fname = _make_word_doc(result)
-        if fname:
-            result["docx_filename"] = fname
-            result["download_url"] = f"/download_report/{fname}"
-    SESSIONS[session_id].append({"role": "assistant", "content": result.get("final_report", "")})
+        doc_data = _make_word_doc_base64(result)
+        if doc_data:
+            resp_data["docx"] = doc_data
     
-    # Save to history
-    report_id = str(uuid.uuid4())
-    save_to_history(report_id, req.topic, result)
-    
-    return JSONResponse({"session_id": session_id, "report_id": report_id, "result": _serialisable(result)})
+    return JSONResponse(resp_data)
 
 
 def _stream_workflow_gen(wf, topic: str, generate_docx: bool):
@@ -186,17 +190,11 @@ def _stream_workflow_gen(wf, topic: str, generate_docx: bool):
 
         if generate_docx:
             yield _sse({"type": "progress", "message": "Generating Word document..."})
-            fname = _make_word_doc(final_state)
-            if fname:
-                final_state["docx_filename"] = fname
-                final_state["download_url"] = f"/download_report/{fname}"
+            doc_data = _make_word_doc_base64(final_state)
+            if doc_data:
+                final_state["docx"] = doc_data
 
-
-        # Save to history
-        report_id = str(uuid.uuid4())
-        save_to_history(report_id, topic, final_state)
-        
-        yield _sse({"type": "result", "report_id": report_id, "result": _serialisable(final_state)})
+        yield _sse({"type": "result", "result": _serialisable(final_state)})
     except Exception as e:
         yield _sse({"type": "error", "error": str(e)})
 
@@ -360,24 +358,11 @@ async def rag_recent(limit: int = Query(10, ge=1, le=50)):
 
 @app.get("/history")
 async def list_history():
-    """Get all past research topics and IDs."""
-    return get_all_history()
-
+    return []
 
 @app.get("/history/{id}")
 async def get_history_item(id: str):
-    """Retrieve a specific past research result."""
-    item = get_history_by_id(id)
-    if not item:
-        raise HTTPException(status_code=404, detail="History item not found")
-    return item
-
-
-@app.delete("/history/{id}")
-async def remove_history_item(id: str):
-    """Delete a specific history item."""
-    delete_history(id)
-    return {"status": "deleted"}
+    return {}
 
 
 # ── /status ────────────────────────────────────────────────────────────────────
