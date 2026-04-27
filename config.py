@@ -100,6 +100,9 @@ OUTPUT_DIR = "outputs"
 REPORTS_DIR = f"{OUTPUT_DIR}/reports"
 LOGS_DIR = f"{OUTPUT_DIR}/logs"
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-os.makedirs(REPORTS_DIR, exist_ok=True)
-os.makedirs(LOGS_DIR, exist_ok=True)
+try:
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(REPORTS_DIR, exist_ok=True)
+    os.makedirs(LOGS_DIR, exist_ok=True)
+except Exception:
+    pass
