@@ -20,7 +20,7 @@
 </p>
 ## 🎥 Demo
 
-[![Watch Demo](https://via.placeholder.com/800x450.png?text=Watch+Demo)](https://github.com/peakscripter/Multi-Agent-Research-System/blob/main/assets/demo%20mars.mp4)
+[![Watch Demo](https://streamable.com/e/1yxdjz?autoplay=1&muted=1)
 
 ---
 
