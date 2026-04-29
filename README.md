@@ -20,7 +20,7 @@
 </p>
 ## 🎥 Demo
 
-[Watch Demo](https://streamable.com/1yxdjz)
+[![MARS Demo](./assets/demo-thumbnail.png)](https://streamable.com/1yxdjz)
 
 ---
 
