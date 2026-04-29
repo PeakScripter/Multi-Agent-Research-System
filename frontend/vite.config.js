@@ -15,6 +15,7 @@ export default defineConfig({
       "/status": "http://localhost:8000",
       "/download_report": "http://localhost:8000",
       "/documents": "http://localhost:8000",
+      "/fix-diagram": "http://localhost:8000",
     },
   },
 });

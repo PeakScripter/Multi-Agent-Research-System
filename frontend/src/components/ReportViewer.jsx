@@ -308,7 +308,7 @@ function VisualsTab({ diagrams }) {
           <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', margin: '0 0 4px' }}>{d.title}</h3>
           <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '0 0 16px' }}>{d.description}</p>
           <div style={{ background: 'var(--bg)', borderRadius: 6, padding: 16, overflowX: 'auto', border: '1px solid var(--border)' }}>
-            <MermaidDiagram code={d.mermaid_code} />
+            <MermaidDiagram code={d.mermaid_code} title={d.title} description={d.description} />
           </div>
           <details style={{ marginTop: 8 }}>
             <summary style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', cursor: 'pointer' }}>View source</summary>

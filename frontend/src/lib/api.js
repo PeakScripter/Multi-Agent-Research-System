@@ -66,6 +66,28 @@ export async function synthesizeSpeech(text) {
   return URL.createObjectURL(blob);
 }
 
+export async function fixDiagram(mermaidCode, title = "", errorMessage = "") {
+  const res = await fetch(`${BASE}/fix-diagram`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mermaid_code: mermaidCode, title, error_message: errorMessage }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.fixed ? data.mermaid_code : null;
+}
+
+export async function regenerateDiagram(title, description = "") {
+  const res = await fetch(`${BASE}/regenerate-diagram`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, description }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.ok ? data.mermaid_code : null;
+}
+
 export async function getStatus() {
   const res = await fetch(`${BASE}/status`);
   return res.json();

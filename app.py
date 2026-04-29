@@ -89,6 +89,16 @@ class TTSRequest(BaseModel):
     speaker: Optional[str] = "meera"
 
 
+class FixDiagramRequest(BaseModel):
+    mermaid_code: str
+    title: Optional[str] = ""
+    error_message: Optional[str] = ""
+
+class RegenerateDiagramRequest(BaseModel):
+    title: str
+    description: Optional[str] = ""
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _ensure_session(session_id: Optional[str]) -> str:
@@ -344,6 +354,33 @@ async def rag_search(q: str = Query(..., min_length=2), limit: int = Query(5, ge
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── /fix-diagram ───────────────────────────────────────────────────────────────
+
+@app.post("/fix-diagram")
+async def fix_diagram(req: FixDiagramRequest):
+    """Accept broken Mermaid code + error, return LLM-corrected syntax."""
+    from agents.visualization_agent import fix_mermaid_syntax
+    fixed = fix_mermaid_syntax(
+        broken_code=req.mermaid_code,
+        diagram_title=req.title,
+        error_message=req.error_message,
+    )
+    if fixed:
+        return JSONResponse({"fixed": True, "mermaid_code": fixed})
+    return JSONResponse({"fixed": False, "mermaid_code": req.mermaid_code}, status_code=422)
+
+
+@app.post("/regenerate-diagram")
+async def regenerate_diagram_endpoint(req: RegenerateDiagramRequest):
+    """Regenerate a Mermaid diagram from scratch using only title + description.
+    Simpler and more reliable than trying to repair broken syntax."""
+    from agents.visualization_agent import regenerate_diagram
+    code = regenerate_diagram(title=req.title, description=req.description or "")
+    if code:
+        return JSONResponse({"ok": True, "mermaid_code": code})
+    return JSONResponse({"ok": False, "mermaid_code": ""}, status_code=422)
+
+
 @app.get("/rag/recent")
 async def rag_recent(limit: int = Query(10, ge=1, le=50)):
     """List the most recent research entries stored in Qdrant."""
@@ -427,6 +464,32 @@ if os.path.isdir(_FRONTEND_DIST):
         if os.path.isfile(file_path):
             return FileResponse(file_path)
         return FileResponse(os.path.join(_FRONTEND_DIST, "index.html"))
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Display welcome message when the server starts."""
+    import sys
+    welcome = """
+╭─────────────────────────────────────────────────────────────╮
+│                                                             │
+│         🤖 MARS Research Assistant v2.0                    │
+│         Multi-Agent Research System                        │
+│                                                             │
+│  Powered by: Groq GPT-OSS 120B + Sarvam Voice              │
+│  RAG Engine: Qdrant Vector Database                        │
+│                                                             │
+│  Your AI-powered research companion is ready! 🚀           │
+│                                                             │
+│  Web UI:     http://localhost:8000                         │
+│  API Docs:   http://localhost:8000/docs                   │
+│  Chat:       POST /chat      - Conversational research     │
+│  Research:   POST /research  - Full agent workflow         │
+│  Voice:      POST /voice     - Upload audio for analysis   │
+│                                                             │
+╰─────────────────────────────────────────────────────────────╯
+"""
+    print(welcome, file=sys.stderr)
 
 
 if __name__ == "__main__":

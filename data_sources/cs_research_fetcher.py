@@ -90,7 +90,11 @@ class CSResearchFetcher:
             'ml', 'dl', 'cv', 'nlp', 'api', 'framework', 'library', 'tool',
             'platform', 'architecture', 'design pattern', 'optimization', 'performance',
             'scalability', 'reliability', 'security', 'privacy', 'data mining',
-            'big data', 'analytics', 'visualization', 'user interface', 'ux', 'ui'
+            'big data', 'analytics', 'visualization', 'user interface', 'ux', 'ui',
+            'large language model', 'llm', 'llms', 'generative ai', 'foundation model',
+            'transformer', 'gpt', 'bert', 'code generation', 'code synthesis',
+            'prompt engineering', 'fine-tuning', 'rlhf', 'reinforcement learning',
+            'language model', 'text generation', 'multimodal', 'embedding', 'tokenization',
         ]
         
         topic_lower = topic.lower()
