@@ -18,7 +18,9 @@
   <a href="#-frontend">Frontend</a> •
   <a href="#-api-reference">API</a>
 </p>
-[Watch Demo](https://github.com/peakscripter/Multi-Agent-Research-System/blob/main/assets/demo%20mars.mp4)
+## 🎥 Demo
+
+[![Watch Demo](https://via.placeholder.com/800x450.png?text=Watch+Demo)](https://github.com/peakscripter/Multi-Agent-Research-System/blob/main/assets/demo%20mars.mp4)
 
 ---
 
