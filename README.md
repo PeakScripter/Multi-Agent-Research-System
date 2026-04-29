@@ -20,7 +20,7 @@
 </p>
 ## 🎥 Demo
 
-[![Watch Demo](https://streamable.com/e/1yxdjz?autoplay=1&muted=1)
+[Watch Demo](https://streamable.com/1yxdjz)
 
 ---
 
