@@ -19,6 +19,7 @@
   <a href="#-api-reference">API</a>
 </p>
 [Watch Demo](https://raw.githubusercontent.com/peakscripter/Multi-Agent-Research-System/main/assets/demo mars.mp4)
+
 ---
 
 ## 🏗 Architecture
